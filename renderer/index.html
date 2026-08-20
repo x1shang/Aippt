@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>AIPPT · AI 演示文稿生成器</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="#fff" d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2z"/></svg></div>
+    <div class="brand-text">
+      <div class="brand-name">AIPPT</div>
+      <div class="brand-sub">AI 演示文稿生成器</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="badge-tag">OpenAI 兼容</span>
+    <span class="version" id="appVersion">v1.0.0</span>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ============ 左侧：步骤面板 ============ -->
+  <section class="panel-left">
+
+    <div class="step-card">
+      <div class="step-head">
+        <span class="step-no">1</span>
+        <h2>模型配置</h2>
+        <span class="step-state" id="modelState"></span>
+      </div>
+      <div class="step-body">
+        <label class="field-label" for="inBaseUrl">API Base URL</label>
+        <input id="inBaseUrl" class="text-input" type="text" placeholder="https://api.openai.com/v1" spellcheck="false" autocomplete="off">
+        <label class="field-label" for="inApiKey">API Key
+          <button type="button" class="link-btn" id="btnToggleKey">显示</button>
+        </label>
+        <input id="inApiKey" class="text-input" type="password" placeholder="sk-…" spellcheck="false" autocomplete="off">
+        <label class="field-label" for="inModel">模型名称</label>
+        <input id="inModel" class="text-input" type="text" placeholder="gpt-4o-mini / deepseek-chat / qwen-plus" spellcheck="false" autocomplete="off">
+        <div class="row">
+          <button type="button" class="btn btn-ghost" id="btnTest">测试连接</button>
+          <span class="test-result" id="testResult"></span>
+        </div>
+        <p class="hint">支持任意 OpenAI 兼容接口：OpenAI、DeepSeek、通义千问、Kimi、智谱、本地 Ollama 等。配置仅保存在本机。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-head">
+        <span class="step-no">2</span>
+        <h2>导入 Markdown</h2>
+        <span class="step-state" id="mdState"></span>
+      </div>
+      <div class="step-body">
+        <div class="dropzone" id="dropzone">
+          <div class="dz-icon">📄</div>
+          <p class="dz-title">点击选择 或 拖拽 .md 文件到此处</p>
+          <p class="dz-sub">支持 .md / .markdown / .txt</p>
+        </div>
+        <div class="md-meta" id="mdMeta" hidden>
+          <div class="md-file">
+            <span class="file-icon">📄</span>
+            <span class="file-name" id="mdName"></span>
+            <button type="button" class="link-btn" id="btnClearMd">移除</button>
+          </div>
+          <div class="chips" id="mdChips"></div>
+        </div>
+        <div class="row">
+          <button type="button" class="btn btn-ghost" id="btnSample">载入示例 Markdown</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-head">
+        <span class="step-no">3</span>
+        <h2>选择样式</h2>
+      </div>
+      <div class="step-body">
+        <div class="style-grid" id="styleGrid"></div>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-head">
+        <span class="step-no">4</span>
+        <h2>生成 PPTX</h2>
+      </div>
+      <div class="step-body">
+        <div class="seg" id="modeSeg">
+          <button type="button" class="seg-item active" data-mode="ai">AI 增强内容</button>
+          <button type="button" class="seg-item" data-mode="direct">仅排版（不调 AI）</button>
+        </div>
+        <label class="field-label" for="btnPickOut">保存位置</label>
+        <div class="out-row">
+          <input id="outPath" class="text-input" type="text" readonly placeholder="点击右侧选择保存位置…">
+          <button type="button" class="btn btn-ghost" id="btnPickOut">选择…</button>
+        </div>
+        <button type="button" class="btn btn-primary btn-block" id="btnGenerate">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2z"/></svg>
+          <span id="btnGenerateText">生成 PPT</span>
+        </button>
+        <div class="log-box" id="logBox" hidden>
+          <div class="log-title">生成日志</div>
+          <div class="log-lines" id="logLines"></div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ============ 右侧：预览 / 结果 ============ -->
+  <section class="panel-right">
+
+    <div class="preview-card">
+      <div class="preview-head">
+        <h2>大纲预览</h2>
+        <span class="preview-stats" id="previewStats"></span>
+      </div>
+      <div class="preview-body" id="previewBody">
+        <div class="empty-tip">
+          <div class="empty-icon">🎨</div>
+          <p>导入 Markdown 后，这里将实时显示解析出的幻灯片大纲。</p>
+          <p class="hint">以 <code>&gt;</code> 开头的行会自动成为该页幻灯片的<b>演讲备注</b>，不会出现在页面上。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="result-card" id="resultCard" hidden>
+      <div class="result-icon">✅</div>
+      <div class="result-main">
+        <div class="result-title">生成成功！</div>
+        <div class="result-desc" id="resultDesc"></div>
+        <div class="result-path" id="resultPath"></div>
+        <div class="result-actions">
+          <button type="button" class="btn btn-primary" id="btnOpenFolder">打开所在文件夹</button>
+          <button type="button" class="btn btn-ghost" id="btnResetOut">重新生成到其他位置</button>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="../shared/parser.js"></script>
+<script src="../shared/styles.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+{
+  "name": "aippt",
+  "productName": "AIPPT",
+  "version": "1.0.0",
+  "description": "现代化的 AI PPT 生成器：导入 Markdown，调用任意 OpenAI 兼容 API 自动生成幻灯片，支持多套样式，一键导出 .pptx",
+  "main": "main/main.js",
+  "author": "AIPPT Team",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable --publish never",
+    "test": "node test/run-core-tests.js",
+    "icon": "powershell -ExecutionPolicy Bypass -File assets/make-icon.ps1"
+  },
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.aippt.app",
+    "productName": "AIPPT",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main/**/*",
+      "renderer/**/*",
+      "shared/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "AIPPT-${version}-portable.${ext}",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "portable": {
+      "artifactName": "AIPPT-${version}-portable.${ext}"
+    }
+  }
+}
