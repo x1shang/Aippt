@@ -1,0 +1,44 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "AIPPT · 主进程调试",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/electron/dist/electron.exe",
+      "args": ["."],
+      "env": {
+        "ELECTRON_RUN_AS_NODE": ""
+      },
+      "outputCapture": "std",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "AIPPT · 主进程 + 渲染端口(9222)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/electron/dist/electron.exe",
+      "args": [".", "--remote-debugging-port=9222"],
+      "env": {
+        "ELECTRON_RUN_AS_NODE": ""
+      },
+      "outputCapture": "std",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "AIPPT · 渲染进程调试（附加 9222）",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "webRoot": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "AIPPT · 主进程 + 渲染进程全调试",
+      "configurations": ["AIPPT · 主进程 + 渲染端口(9222)", "AIPPT · 渲染进程调试（附加 9222）"]
+    }
+  ]
+}

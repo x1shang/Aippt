@@ -2,5 +2,6 @@ node_modules/
 dist/
 out/
 test/out/
+test/fixtures/
 *.log
 .DS_Store

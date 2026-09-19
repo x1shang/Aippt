@@ -322,6 +322,22 @@ body {
 }
 .result-actions { display: flex; gap: 10px; }
 
+/* ---------- 富内容特征徽标 ---------- */
+.feat-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.feat-tag {
+  font-size: 11px; font-weight: 600;
+  padding: 1.5px 8px; border-radius: 999px;
+  background: #EFF1F7; color: var(--sub);
+  border: 1px solid transparent;
+}
+.feat-math { background: #EEF0FF; color: #4338CA; border-color: #DDD8FF; }
+.feat-table { background: #E8F7EF; color: #15803D; border-color: #BBF7D0; }
+.feat-image { background: #FFF4E8; color: #C2410C; border-color: #FED7AA; }
+.feat-callout { background: #FFFBEB; color: #A16207; border-color: #FDE68A; }
+.feat-code { background: #F1F5F9; color: #475569; border-color: #E2E8F0; }
+.feat-env { background: #F5F3FF; color: #6D28D9; border-color: #DDD6FE; }
+.feat-overlay { background: #ECFEFF; color: #0E7490; border-color: #A5F3FC; }
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed; top: 70px; left: 50%; transform: translateX(-50%);

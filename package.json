@@ -1,8 +1,8 @@
 {
   "name": "aippt",
   "productName": "AIPPT",
-  "version": "1.0.0",
-  "description": "现代化的 AI PPT 生成器：导入 Markdown，调用任意 OpenAI 兼容 API 自动生成幻灯片，支持多套样式，一键导出 .pptx",
+  "version": "2.2.0",
+  "description": "现代化的 AI PPT 生成器：公式/图片/表格/定理/代码高亮原样渲染，Beamer 风格渐进显示，自动编号与交叉引用，支持任意 OpenAI 兼容 API",
   "main": "main/main.js",
   "author": "AIPPT Team",
   "license": "MIT",
@@ -13,6 +13,8 @@
     "icon": "powershell -ExecutionPolicy Bypass -File assets/make-icon.ps1"
   },
   "dependencies": {
+    "highlight.js": "^11.12.0",
+    "katex": "^0.18.7",
     "pptxgenjs": "^3.12.0"
   },
   "devDependencies": {

@@ -10,11 +10,20 @@ const fs = require('fs');
 
 const { runGenerate } = require('./generate-flow.js');
 const { testConnection } = require('./ai.js');
+const { RichRenderer } = require('./rich-renderer.js');
 
 const MAX_MD_BYTES = 2 * 1024 * 1024; // 2MB
 
 let mainWindow = null;
 let busy = false;
+let richRenderer = null;
+
+/** 富内容渲染器（离屏窗口）按需创建 */
+async function getRenderer() {
+  if (!richRenderer) richRenderer = new RichRenderer();
+  await richRenderer.start();
+  return richRenderer;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -85,12 +94,75 @@ function createWindow() {
             return { steps, styles, api, previewCount, notesShown, fileOk, slideCount: res.slideCount, errs };
           })()`);
           const outExists = fs.existsSync(smokeOut);
+
+          // ---- v2/v2.1 渲染链路（公式 / 表格 / 定理 / 渐进显示 / 代码高亮）----
+          const mathMd = [
+            '# 冒烟测试',
+            '',
+            '## 公式渲染',
+            '',
+            '行内公式 $E=mc^2$ 与 $\\alpha\\implies A$。',
+            '',
+            '$$',
+            '\\int_{0}^{1} x^{2}\\,dx = \\frac{1}{3} \\label{eq:smoke}',
+            '$$',
+            '',
+            '见 \\eqref{eq:smoke}。',
+            '',
+            '## 表格',
+            '',
+            '| 名称 | 公式 |',
+            '| --- | --- |',
+            '| 勾股 | $a^2+b^2=c^2$ |',
+            '',
+            '## 定理块',
+            '',
+            '\\begin{theorem}[冒烟] \\label{thm:smoke}',
+            '设 $a>0$，则 $\\sqrt{a}>0$。',
+            '\\end{theorem}',
+            '',
+            '## 渐进显示',
+            '',
+            '- 第一步',
+            '- 第二步 <2->',
+            ''
+          ].join('\n');
+          const mathOut = path.join(os.tmpdir(), `aippt-smoke-math-${Date.now()}.pptx`);
+          let mathMedia = 0;
+          let mathSlides = 0;
+          let hljsOk = false;
+          try {
+            const hljs = require('highlight.js/lib/common');
+            hljs.registerLanguage('latex', require('highlight.js/lib/languages/latex'));
+            hljsOk = hljs.highlight('def f(x): return x', { language: 'python', ignoreIllegals: true })
+              .value.includes('hljs-');
+          } catch (e) {
+            hljsOk = false;
+          }
+          try {
+            const out = await runGenerate(
+              { mdContent: mathMd, styleId: 'tech-blue', mode: 'direct', outPath: mathOut },
+              () => {},
+              { renderer: await getRenderer() }
+            );
+            mathSlides = out.slideCount;
+            const JSZip = require('jszip');
+            const zip = await JSZip.loadAsync(fs.readFileSync(mathOut));
+            mathMedia = Object.keys(zip.files).filter((n) => /^ppt\/media\/[^/]+\.(png|jpe?g)$/i.test(n)).length;
+            fs.unlinkSync(mathOut);
+          } catch (e) {
+            console.error('AIPPT_SMOKE_MATH_ERROR ' + e.message);
+          }
+
           const ok = result.steps === 4 && result.styles === 6 && result.api === 'object' &&
             result.previewCount === 7 && result.notesShown === 7 && result.fileOk === true &&
-            result.slideCount === 3 && outExists && result.errs.length === 0;
+            result.slideCount === 3 && outExists && result.errs.length === 0 &&
+            // 冒烟文档：封面 + 公式 + 表格 + 定理 = 4 页，渐进显示 2 步 = 共 6 页；渲染图 ≥ 3 张
+            mathMedia >= 3 && mathSlides >= 6 && hljsOk === true;
+          const payload = { ...result, outExists, mathMedia, mathSlides, hljsOk, ok };
           const smokeReport = path.join(os.tmpdir(), 'aippt-smoke-result.json');
-          try { fs.writeFileSync(smokeReport, JSON.stringify({ ...result, outExists, ok })); } catch (e) { /* ignore */ }
-          console.log('AIPPT_SMOKE_RESULT ' + JSON.stringify({ ...result, outExists, ok }));
+          try { fs.writeFileSync(smokeReport, JSON.stringify(payload)); } catch (e) { /* ignore */ }
+          console.log('AIPPT_SMOKE_RESULT ' + JSON.stringify(payload));
           mockServer.close();
           fs.unlinkSync(smokeOut);
           app.exit(ok ? 0 : 1);
@@ -163,11 +235,35 @@ ipcMain.handle('dialog:save-pptx', async (_e, defaultName) => {
   return r.filePath.endsWith('.pptx') ? r.filePath : `${r.filePath}.pptx`;
 });
 
+ipcMain.handle('dialog:open-bib', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, {
+    title: '选择 BibTeX 文献库',
+    filters: [
+      { name: 'BibTeX', extensions: ['bib'] },
+      { name: '所有文件', extensions: ['*'] }
+    ],
+    properties: ['openFile']
+  });
+  if (r.canceled || !r.filePaths.length) return { canceled: true };
+  const filePath = r.filePaths[0];
+  try {
+    const text = fs.readFileSync(filePath, 'utf8');
+    const bib = require('../shared/bib.js');
+    const parsed = bib.parseBib(text);
+    return { canceled: false, path: filePath, text, count: Object.keys(parsed.entries || {}).length };
+  } catch (e) {
+    return { canceled: false, path: filePath, text: '', count: 0, error: String(e.message || e) };
+  }
+});
+
 ipcMain.handle('generate', async (_e, payload) => {
   if (busy) throw new Error('已有生成任务正在进行，请稍候');
   busy = true;
   try {
-    return await runGenerate(payload, sendProgress);
+    sendProgress('正在准备公式渲染引擎…');
+    const renderer = await getRenderer();
+    const searchDirs = [process.cwd(), path.dirname(process.execPath)];
+    return await runGenerate(payload, sendProgress, { renderer, searchDirs });
   } finally {
     busy = false;
   }
@@ -206,5 +302,12 @@ if (!gotLock) {
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
+  });
+
+  app.on('will-quit', () => {
+    if (richRenderer) {
+      richRenderer.dispose();
+      richRenderer = null;
+    }
   });
 }

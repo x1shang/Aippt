@@ -47,6 +47,22 @@
 
 > 架构图建议用深色背景，突出三层链路。
 
+## 效果量化
+
+首 token 延迟 $t_{p50}$ 与吞吐量满足：
+
+$$
+t_{p50} = \frac{L}{v} + t_0, \qquad v = \frac{n_{\text{tok}}}{\Delta t}
+$$
+
+并发 200 时的平均响应时间与成功率：
+
+| 场景 | 延迟 $t_{p50}$ | 成功率 |
+| :--- | ---: | ---: |
+| 单轮起草 | 0.8 s | 99.2% |
+| 长文改写 | 2.4 s | 97.5% |
+表：实测性能指标
+
 ## 客户反馈
 
 > 一图胜千言：贴一张客户增长曲线。
@@ -70,9 +86,16 @@
   // ---------- 状态 ----------
   const state = {
     cfg: loadCfg(),
-    md: null,          // { name, content, parsed }
+    md: null,          // { name, content, parsed, path }
     styleId: 'tech-blue',
     mode: 'ai',
+    overlayMode: 'hide',
+    formulaMode: 'omml-fallback',   // image | omml | omml-fallback
+    animation: true,                // 真「点击出现」动画
+    autoToc: true,
+    footer: true,
+    bibPath: '',
+    bibText: '',
     outPath: '',
     generating: false
   };
@@ -179,15 +202,15 @@
   }
 
   // ---------- Markdown 载入 ----------
-  function applyMd(name, content) {
+  function applyMd(name, content, mdPath) {
     let parsed;
     try {
-      parsed = parser.parseMarkdown(content);
+      parsed = parser.parseMarkdown(content, { fileName: name || '演示文稿' });
     } catch (e) {
       toast('解析 Markdown 失败：' + e.message, true);
       return;
     }
-    state.md = { name, content, parsed };
+    state.md = { name, content, parsed, path: mdPath || '' };
     $('dropzone').hidden = true;
     $('mdMeta').hidden = false;
     $('mdName').textContent = name;
@@ -196,14 +219,23 @@
     const chips = $('mdChips');
     chips.textContent = '';
     const stats = parsed.stats;
-    [
+    const items = [
       ['幻灯片', stats.slides + ' 页'],
       ['要点', stats.bullets + ' 条'],
       ['备注', stats.notes + ' 条']
-    ].forEach(([k, v]) => {
+    ];
+    if (stats.math) items.push(['公式', stats.math + ' 个']);
+    if (stats.tables) items.push(['表格', stats.tables + ' 个']);
+    if (stats.images) items.push(['图片', stats.images + ' 张']);
+    if (stats.envs) items.push(['定理块', stats.envs + ' 个']);
+    if (stats.callouts) items.push(['提示框', stats.callouts + ' 个']);
+    if (stats.code) items.push(['代码块', stats.code + ' 个']);
+    if (stats.overlaySlides) items.push(['渐进显示', stats.overlaySlides + ' 页(+' + stats.steps + ')']);
+    if (stats.refs) items.push(['交叉引用', stats.refs + ' 处']);
+    if (stats.numbered) items.push(['编号对象', stats.numbered + ' 个']);
+    items.forEach(([k, v]) => {
       const c = document.createElement('span');
       c.className = 'chip';
-      c.innerHTML = '';
       c.appendChild(document.createTextNode(k + ' '));
       const b = document.createElement('b');
       b.textContent = v;
@@ -239,6 +271,42 @@
     body.appendChild(tip);
   }
 
+  /** 幻灯片富内容特征徽标（公式/表格/图片/提示框/定理/分步） */
+  function blockFeatureBadges(s) {
+    const counts = { math: 0, table: 0, image: 0, callout: 0, code: 0, env: 0 };
+    for (const b of s.blocks || []) {
+      if (counts[b.type] === undefined) continue;
+      counts[b.type]++;
+    }
+    const defs = [
+      ['math', '🧮 公式'],
+      ['table', '📊 表格'],
+      ['image', '🖼 图片'],
+      ['env', '📐 定理'],
+      ['callout', '💡 提示框'],
+      ['code', '⌨ 代码']
+    ];
+    const wrap = document.createElement('div');
+    wrap.className = 'feat-row';
+    let any = false;
+    for (const [key, label] of defs) {
+      if (!counts[key]) continue;
+      any = true;
+      const tag = document.createElement('span');
+      tag.className = 'feat-tag feat-' + key;
+      tag.textContent = label + (counts[key] > 1 ? ' ×' + counts[key] : '');
+      wrap.appendChild(tag);
+    }
+    if (s.steps && s.steps > 1) {
+      any = true;
+      const tag = document.createElement('span');
+      tag.className = 'feat-tag feat-overlay';
+      tag.textContent = '🎬 ' + s.steps + ' 步';
+      wrap.appendChild(tag);
+    }
+    return any ? wrap : null;
+  }
+
   // ---------- 大纲预览 ----------
   function renderPreview(parsed) {
     const body = $('previewBody');
@@ -267,6 +335,9 @@
       titleRow.appendChild(title); titleRow.appendChild(badge);
 
       main.appendChild(titleRow);
+
+      const feat = blockFeatureBadges(s);
+      if (feat) main.appendChild(feat);
 
       if (s.subtitle) {
         const sub = document.createElement('div');
@@ -343,8 +414,15 @@
       const res = await window.aippt.generate({
         apiConfig: apiConfig(),
         mdContent: state.md.content,
+        mdPath: state.md.path || '',
         styleId: state.styleId,
         mode: state.mode,
+        overlayMode: state.overlayMode,
+        formulaMode: state.formulaMode,
+        animation: state.animation,
+        autoToc: state.autoToc,
+        footer: state.footer,
+        bibText: state.bibText || '',
         outPath: state.outPath
       });
       showResult(res);
@@ -357,8 +435,16 @@
   }
 
   function showResult(res) {
-    $('resultDesc').textContent = (res.mode === 'ai' ? 'AI 增强 · ' : '直接排版 · ') +
-      '共 ' + res.slideCount + ' 页幻灯片 · 样式：' + (STYLES.find((s) => s.id === state.styleId) || {}).name;
+    const st = res.stats || {};
+    const bits = [];
+    bits.push(res.mode === 'ai' ? 'AI 增强' : '直接排版');
+    bits.push('共 ' + res.slideCount + ' 页');
+    if (st.math) bits.push('公式 ' + st.math);
+    if (st.tables) bits.push('表格 ' + st.tables);
+    if (st.images) bits.push('图片 ' + st.images);
+    if (res.warnings && res.warnings.length) bits.push('⚠ ' + res.warnings.length + ' 条提示');
+    $('resultDesc').textContent = bits.join(' · ') +
+      ' · 样式：' + ((STYLES.find((s) => s.id === state.styleId) || {}).name || '');
     $('resultPath').textContent = res.path;
     $('resultCard').hidden = false;
     appendLog('✔ ' + res.path, 'ok');
@@ -370,7 +456,7 @@
     dz.addEventListener('click', async () => {
       try {
         const r = await window.aippt.openMdDialog();
-        if (r) applyMd(r.name, r.content);
+        if (r) applyMd(r.name, r.content, r.path);
       } catch (e) { toast(e.message, true); }
     });
     ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => {
@@ -387,7 +473,8 @@
         return;
       }
       const reader = new FileReader();
-      reader.onload = () => applyMd(file.name, String(reader.result || ''));
+      const droppedPath = window.aippt.getPathForFile(file) || '';
+      reader.onload = () => applyMd(file.name, String(reader.result || ''), droppedPath);
       reader.onerror = () => toast('读取文件失败', true);
       reader.readAsText(file, 'utf-8');
     });
@@ -423,6 +510,40 @@
       if (!btn) return;
       state.mode = btn.dataset.mode;
       $('modeSeg').querySelectorAll('.seg-item').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+
+    $('overlaySeg').addEventListener('click', (e) => {
+      const btn = e.target.closest('.seg-item');
+      if (!btn) return;
+      state.overlayMode = btn.dataset.ov;
+      $('overlaySeg').querySelectorAll('.seg-item').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+
+    $('formulaSeg').addEventListener('click', (e) => {
+      const btn = e.target.closest('.seg-item');
+      if (!btn) return;
+      state.formulaMode = btn.dataset.formula;
+      $('formulaSeg').querySelectorAll('.seg-item').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+
+    $('animSeg').addEventListener('click', (e) => {
+      const btn = e.target.closest('.seg-item');
+      if (!btn) return;
+      state.animation = btn.dataset.anim === 'on';
+      $('animSeg').querySelectorAll('.seg-item').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+
+    $('chkToc').addEventListener('change', (e) => { state.autoToc = e.target.checked; });
+    $('chkFooter').addEventListener('change', (e) => { state.footer = e.target.checked; });
+
+    $('btnPickBib').addEventListener('click', async () => {
+      const r = await window.aippt.chooseBibPath();
+      if (!r || r.canceled) return;
+      state.bibPath = r.path || '';
+      state.bibText = r.text || '';
+      $('bibPath').value = state.bibPath;
+      $('bibState').textContent = r.count ? `已载入 ${r.count} 条文献` : '未解析到条目';
+      $('bibState').className = 'test-result' + (r.count ? ' ok' : ' err');
     });
 
     $('btnPickOut').addEventListener('click', async () => {

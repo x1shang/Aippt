@@ -13,12 +13,14 @@
     <div class="logo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="#fff" d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2z"/></svg></div>
     <div class="brand-text">
       <div class="brand-name">AIPPT</div>
-      <div class="brand-sub">AI 演示文稿生成器</div>
+      <div class="brand-sub">AI 演示文稿生成器 · 公式与图片渲染</div>
     </div>
   </div>
   <div class="topbar-right">
+    <span class="badge-tag">LaTeX 公式渲染</span>
+    <span class="badge-tag">渐进显示</span>
     <span class="badge-tag">OpenAI 兼容</span>
-    <span class="version" id="appVersion">v1.0.0</span>
+    <span class="version" id="appVersion">v2.2.0</span>
   </div>
 </header>
 
@@ -73,6 +75,15 @@
         <div class="row">
           <button type="button" class="btn btn-ghost" id="btnSample">载入示例 Markdown</button>
         </div>
+        <p class="hint">
+          <b>公式</b>：<code>$…$</code> 行内、<code>$$…$$</code> 行间（KaTeX 原生渲染，支持 cases / pmatrix / aligned / \ce 化学式等）<br>
+          <b>图片</b>：<code>![]()</code>、<code>![[…]]</code>、<code>\includegraphics{}</code>（相对路径按 md 所在目录解析）<br>
+          <b>表格</b>：GFM 管道表格会自动分页缩放；<b>提示框</b>：<code>&gt; [!tip]</code> 渲染为可见彩色块<br>
+          <b>定理</b>：<code>\begin{theorem}[标题]…\end{theorem}</code>（lemma/definition/proof…）<br>
+          <b>编号引用</b>：<code>\label{eq:x}</code> 自动编号，<code>\ref{}</code>/<code>\eqref{}</code> 自动替换<br>
+          <b>渐进显示</b>：<code>\pause</code>、<code>\onslide&lt;2-&gt;</code>、列表项后缀 <code>&lt;2-&gt;</code>、行内 <code>\only&lt;2-&gt;{…}</code><br>
+          <b>代码</b>：带语言名的代码块自动语法高亮；<b>备注</b>：以 <code>&gt;</code> 开头的普通行 → 该页演讲备注
+        </p>
       </div>
     </div>
 
@@ -96,6 +107,39 @@
           <button type="button" class="seg-item active" data-mode="ai">AI 增强内容</button>
           <button type="button" class="seg-item" data-mode="direct">仅排版（不调 AI）</button>
         </div>
+
+        <label class="field-label">公式导出方式</label>
+        <div class="seg" id="formulaSeg">
+          <button type="button" class="seg-item active" data-formula="omml-fallback">原生公式 + 图片兜底</button>
+          <button type="button" class="seg-item" data-formula="omml">仅原生公式</button>
+          <button type="button" class="seg-item" data-formula="image">渲染成图片</button>
+        </div>
+        <p class="hint">公式写进 PPT 的是 <b>PowerPoint 原生公式对象</b>，双击就能改；<b>图片兜底</b>让 WPS/LibreOffice/Keynote 也能看见公式。选「渲染成图片」则整页出图，任何客户端都一模一样但不可编辑。</p>
+
+        <label class="field-label">渐进显示（Beamer overlay：\pause / &lt;2-&gt;）</label>
+        <div class="seg" id="overlaySeg">
+          <button type="button" class="seg-item active" data-ov="hide">隐藏·留空位</button>
+          <button type="button" class="seg-item" data-ov="dim">灰显后续</button>
+          <button type="button" class="seg-item" data-ov="collapse">隐藏·不留空</button>
+        </div>
+        <label class="field-label">分步实现方式</label>
+        <div class="seg" id="animSeg">
+          <button type="button" class="seg-item active" data-anim="on">点击出现动画（一页）</button>
+          <button type="button" class="seg-item" data-anim="off">展开成多页</button>
+        </div>
+        <p class="hint"><b>点击出现</b>：纯文字分步页合成一页，放映时按一下出现一条（真 Beamer 手感，只在 PowerPoint 生效）；<b>展开成多页</b>：每个分步一页，任何播放器都稳定，打印/导出 PDF 也不丢内容。</p>
+
+        <label class="field-label">导航与文献</label>
+        <div class="check-row">
+          <label class="check-item"><input type="checkbox" id="chkToc" checked> 自动生成目录页</label>
+          <label class="check-item"><input type="checkbox" id="chkFooter" checked> 页脚章节导航 + 页码</label>
+        </div>
+        <div class="out-row">
+          <input id="bibPath" class="text-input" type="text" readonly placeholder="导入 .bib 文献库（可选，支持 \cite / [@key]）…">
+          <button type="button" class="btn btn-ghost" id="btnPickBib">选择…</button>
+        </div>
+        <span class="test-result" id="bibState"></span>
+
         <label class="field-label" for="btnPickOut">保存位置</label>
         <div class="out-row">
           <input id="outPath" class="text-input" type="text" readonly placeholder="点击右侧选择保存位置…">
@@ -150,6 +194,7 @@
 
 <div class="toast" id="toast" hidden></div>
 
+<script src="../shared/overlay.js"></script>
 <script src="../shared/parser.js"></script>
 <script src="../shared/styles.js"></script>
 <script src="app.js"></script>
