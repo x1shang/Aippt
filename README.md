@@ -45,6 +45,13 @@ v1 已经能"Markdown → 好看的 PPT"。v2.2 把这些**学术刚需**补齐�
 | 4 | 📚 **文献引用** | `\cite{key}` / `[@key]` → `[1]`，文末自动追加参考文献页 | 内置 BibTeX 解析 + 按引用顺序编号 + 未定义 → `[?]` 并告警 |
 | 5 | ⌨️ **算法伪代码** | `\begin{algorithm}` 直接写伪代码，带行号/缩进/关键字着色 | `\State`/`\If`/`\For`/`\While`/`\Require`/`\Call` 全套语义解析 |
 | 6 | 🛡 **公式兜底与降级** | 窄平台（WPS/LibreOffice/Keynote）自动回落到同位置高清图 | `mc:AlternateContent`：`Choice`=原生公式，`Fallback`=图片（**PowerPoint 自己导出公式的做法**） |
+| 7 | 🎨 **样式也可以做成插件** | 把 `*.aippt-style.json` 导入进来即用；右键任意样式可导出 JSON 改完再导入 | 纯数据（只含颜色/字体/边距），严格校验、越界夹紧、内建不覆盖 |
+| 8 | 📚 **文献库可直接写在 md 里** | 界面导入 `.bib`，或把 BibTeX 写进 md（含 HTML 注释里，页面上不可见） | 三种来源自动合并：界面导入 + 同目录 `references.bib` + md 内嵌 |
+
+> **v2.2.0 补丁（重要）**：修掉了「点击出现动画」在真实放映器里**能点击但不出现内容**的问题
+> （缺少 `<p:bldLst>` 构建列表 + 标记剥离正则跨 run 吃掉正文）。
+> 现在已用**本机真实 WPS 放映 + `GetClickCount()`** 验证：动画点击数 2，逐次点击墨迹 5287 → 6741 → 8315。
+> 细节与验证脚本见 `docs/click-animation-notes.md`。
 
 v1 打下的地基在同一条流水线上继续可用：公式/表格/图片渲染、Obsidian 提示框、代码高亮、演讲备注、
 **定理环境**（theorem/lemma/proof/…）、**自动编号与交叉引用**（`\ref`/`\eqref`/`\autoref`）、
@@ -60,6 +67,37 @@ v1 打下的地基在同一条流水线上继续可用：公式/表格/图片渲
 
 > 单条公式：原生 OMML 约 **2 KB**，同内容的高清图约 **24 KB**——原生公式只有图的 1/11。
 > 附带收益：**公式在 PPT 里可以改字号、换颜色、重排，导出 PDF/打印也不再糊。**
+
+### 🎨 样式插件（v2.2.0 补丁新增）
+
+样式不再是写死的 6 套——**样式就是一个 JSON 文件**：
+
+```jsonc
+{
+  "$schema": "aippt-style/1",
+  "id": "beamer-academic",
+  "name": "Beamer 学术",
+  "desc": "衬线 · 深蓝 · 米白，最接近 LaTeX 论文的观感",
+  "font": "Latin Modern Roman, Cambria, 宋体, SimSun",
+  "basedOn": "minimal-gray",              // 可选：只写要改的字段
+  "colors": {
+    "primary": "#1B3A6B", "accent": "#B8860B",
+    "text": "#111827", "textSub": "#5B6B7C",
+    "bg": "#FDFCF8", "bgAlt": "#EEF2F8",
+    "coverBg": "#0E2440", "coverText": "#F7F5EF", "coverSub": "#A8C0DC"
+  },
+  "layout": { "titleSize": 26, "bodySize": 15, "marginX": 1.05, "navMax": 10 }
+}
+```
+
+- **导入即用**：界面「选择样式」→「导入样式插件…」，立即出现在样式网格（带"插件"角标）
+- **改着玩**：右键任意样式卡片 →「导出样式插件」→ 改颜色 → 再导入
+- **安全**：纯数据、无代码、无路径；颜色必须 `#RRGGBB`、数值自动夹紧、对比度过低会提醒；坏文件整份跳过不影响启动
+- **不抢内置**：与内置样式同 id 的导入会被拒绝并说明原因
+- 随包附带 3 个示例插件：`styles/beamer-academic.aippt-style.json`（学术衬线）、
+  `styles/midnight-neon.aippt-style.json`（深色霓虹）、`styles/paper-ink.aippt-style.json`（极简水墨）
+- 样张：`test/out/style-*.pptx`（同一份内容 × 9 套样式，直接开对比）
+- 完整规范与设计说明：`docs/style-plugins.md`
 
 ---
 
@@ -82,7 +120,10 @@ node test/bib-tests.js                                     # 61 项文献模块�
 node_modules\electron\dist\electron.exe test\e2e-v22.js     # 24 项 v2.2 端到端（真渲染器）
 node_modules\electron\dist\electron.exe test\e2e-latex.js   # LaTeX.md 端到端
 node_modules\electron\dist\electron.exe test\e2e-features.js
-node_modules\electron\dist\electron.exe test\make-demo.js   # 生成三份示范稿到 test/out/
+node_modules\electron\dist\electron.exe test\make-demo.js           # 三份示范稿（含内置示例 showcase）
+node_modules\electron\dist\electron.exe test\make-style-samples.js  # 9 套样式样张
+node test\style-tests.js                                   # 29 项样式插件测试
+pwsh -File test\wps-anim-probe.ps1 -Pptx test\out\anim-probe.pptx -Slide 2   # 在真 WPS 里验动画
 python test\verify-latex.py test\out\v22-e2e.pptx           # 第三方（python-pptx）校验
 npm run dist                                                # 打包 Windows 便携版
 ```
@@ -247,7 +288,8 @@ aippt/
 │   ├── ai.js                 # OpenAI 兼容客户端 + 占位保护
 │   ├── rich-renderer.js      # 离屏窗口渲染器：HTML/KaTeX → 高清 PNG（2x）
 │   ├── generator.js          # 排版引擎：原生文本 / 原生公式(OMML) / 富内容图片 三条路径
-│   ├── pptx-post.js          # ★ v2.2 一次 zip 后处理：OMML 注入 + 图片兜底 + 点击动画 + 页码
+│   ├── pptx-post.js          # ★ v2.2 一次 zip 后处理：OMML 注入 + 图片兜底 + 点击动画 + 页码（含 bldLst）
+│   ├── style-store.js        # ★ 样式插件：扫描 / 导入 / 删除 / 导出
 │   └── generate-flow.js      # 生成主流程（解析 → 文献 → AI → 排版）
 ├── renderer/
 │   ├── index.html/.css/.js   # 界面：配置 / 导入 / 样式 / 公式与动画选项 / 生成
@@ -257,13 +299,18 @@ aippt/
 │   ├── mml2omml.js           # ★ v2.2 MathML → OMML（DrawingML 版，自带极简 XML 解析，零依赖）
 │   ├── latex2omml.js         # ★ v2.2 LaTeX → OMML（复用内置 KaTeX 的 MathML 输出）
 │   ├── bib.js                # ★ v2.2 BibTeX 解析 + 编号 + 条目格式化
+│   ├── style-loader.js       # ★ 样式插件格式规范：校验 / 派生 / 合并
 │   ├── overlay.js            # `<n->` 解析、可见性判定、行内命令替换
 │   ├── rich-html.js          # 块 → HTML 片段（含算法块、代码高亮）
 │   ├── latex-compat.js       # LaTeX 宏兼容替换表（siunitx/physics/cancel…）
 │   └── styles.js             # 6 套视觉样式
-├── examples/                 # ★ v2.2 演示：beamer-demo.md + references.bib
-├── test/                     # 119 核心 + 61 文献 + 24 v2.2 E2E + LaTeX E2E + python 校验
-└── docs/editable-formulas-and-beamer-gaps.md   # 与 Beamer 的差距分析 + 实现方案
+├── examples/                 # ★ 演示：beamer-demo.md（学术）+ showcase.md（全功能内置示例）+ references.bib
+├── styles/                   # ★ 随包样式插件（3 套 .aippt-style.json）
+├── test/                     # 119 核心 + 61 文献 + 29 样式 + 26 v2.2 E2E + 38 LaTeX E2E + 21 功能 E2E
+└── docs/
+    ├── editable-formulas-and-beamer-gaps.md   # 与 Beamer 的差距分析 + OMML 实现方案
+    ├── style-plugins.md                       # ★ 样式插件完整报告
+    └── click-animation-notes.md               # ★ 点击动画两个真实 bug 的根因与验证方法
 ```
 
 ## 🔍 技术要点（都是踩过的坑）
@@ -274,6 +321,10 @@ aippt/
 - **公式兜底**：块级公式外层包 `mc:AlternateContent`，这是 [MS-ODRAWXML] 里 PowerPoint 自己导出公式的结构。
 - **点击动画**：为每个"要后出现的"文本框写一条 `p:timing`（`presetID=1 presetClass=entr` = 出现），
   目标是**形状级**（每个要点一个文本框，天然可逐条动画）。
+  末尾**必须有 `<p:bldLst>` 构建列表**，否则放映器"点得动但什么都不出现"；剥离动画标记必须**按 run 边界**做，
+  跨 run 的正则会把要显示的正文一起吃掉（PptxGenJS 在每个 run 前都插了 `<a:pPr>`）。详见 `docs/click-animation-notes.md`。
+- **样式插件只上色不改结构**：`shared/style-loader.js` 把插件限制成纯数据（颜色/字体/边距），
+  校验不通过整份跳过、数值越界夹紧、对比度过低提醒——用户下载来路不明的样式也不会把软件弄坏。
 - **LaTeX 兼容层**：`\pu{9.8 m/s^2}` 这类 siunitx 写法会把上下标拆到 `\text{}` 之外，否则 KaTeX 在 `^` 上报错。
 - **引用与编号**：解析期登记 `\label` → 编号；收尾阶段统一遍历所有文本字段替换 `\ref`/`\eqref`/`\cite`。
   定理环境体是用子解析器解析的，子解析的标签会并回主文档，环境体内外的引用才能互相看见。
@@ -286,17 +337,21 @@ aippt/
 | --- | --- | --- |
 | 核心逻辑 | 纯 Node + stub 渲染器 | 119 项 |
 | 文献模块 | 纯 Node | 61 项 |
-| v2.2 端到端 | 真 Electron 渲染器：OMML 结构、兜底图墨迹、动画目标形状存在性、目录页码、无残留标记 | 24 项 |
+| 样式插件 | 纯 Node（校验/派生/合并/导入导出/端到端） | 29 项 |
+| v2.2 端到端 | 真 Electron 渲染器：OMML 结构、兜底图墨迹、动画形状保留正文、目录页码、无残留标记 | 26 项 |
 | LaTeX 端到端 | 真实文档 + 白图检测 + LaTeX 残留检测 | 38 项 |
+| 功能端到端 | 高亮颜色数、分步墨迹递增、定理色带、引用替换 | 21 项 |
+| 真实放映器 | WPS COM：`GetClickCount()` + 逐次截图量墨迹（动画是否真的生效） | 2 套脚本 |
+| 打包产物 | `AIPPT_SMOKE=1` 自检（含 OMML / 兜底图 / 动画 / jszip / 高亮库） | ✓ |
 | 第三方 | python-pptx：页数/图片尺寸/边界/备注 | ✓ |
 
 **关键不变量**：任何产物都不得残留 `⟦MATH:⟧`、`⟦ANIM:⟧`、`⟪T⟫`、`⟪P:⟧`，也不得出现 `<w:>` 命名空间；
-动画目标 `spid` 必须真实存在——这三条都在 E2E 里硬断言。
+动画目标 `spid` 必须真实存在、且其形状里**必须还留着正文**——这几条都在 E2E 里硬断言。
 
 ## ⚠️ 已知限制（别踩）
 
-- **点击动画只在 PowerPoint 里生效**；Google Slides/LibreOffice 会忽略动画（内容会一次性全部显示），
-  要绝对稳妥就选「展开成多页」
+- **点击动画**：已在真实 WPS 与 PowerPoint 兼容结构下验证；Google Slides/LibreOffice 若忽略动画，内容会一次性全部显示，
+  要绝对稳妥就选「展开成多页」。动画页的**内容仍是普通文本框**，即使播放器不支持动画也不会丢内容
 - **原生公式需要 PowerPoint 2010+**；WPS/LibreOffice/Keynote 不在保证范围内（默认模式已带图片兜底）
 - 不支持的：TikZ/PGFPlots 图形、任意宏包与宏编程、多栏精细排版、`\include` 文件拆分
 - 本机测试环境没有安装 PowerPoint，OMML/动画的**渲染效果**请在真 PowerPoint 里开一次
@@ -305,3 +360,5 @@ aippt/
 ## 📄 License
 
 MIT
+
+

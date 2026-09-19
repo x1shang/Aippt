@@ -30,6 +30,7 @@
     },
     "files": [
       "main/**/*",
+      "examples/**/*",
       "renderer/**/*",
       "shared/**/*",
       "assets/**/*",

@@ -340,6 +340,7 @@
     let pendingPara = [];
     let sawHeading1 = false;
     let curStep = 1;
+    let inComment = false;
 
     function nextNumber(kind) {
       counters[kind] = (counters[kind] || 0) + 1;
@@ -474,6 +475,18 @@
         if (i < lines.length) i++;
         ensure().blocks.push({ type: 'code', code: buf.join('\n'), lang, from: curStep, to: null });
         stats.code++;
+        continue;
+      }
+
+      // ---- HTML 注释：整体跳过（示例文件里用它藏 BibTeX 文献库等元数据）----
+      if (inComment) {
+        if (line.includes('-->')) inComment = false;
+        i++;
+        continue;
+      }
+      if (/^\s*<!--/.test(line)) {
+        if (!line.includes('-->')) inComment = true;
+        i++;
         continue;
       }
 

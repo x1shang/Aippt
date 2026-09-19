@@ -13,24 +13,63 @@ const bib = require('../shared/bib.js');
 const { enhanceOutline } = require('./ai.js');
 const { generatePptx } = require('./generator.js');
 
-/** 文献库来源：UI 导入的 .bib 文本，或 md 同目录下的 references.bib */
+/**
+ * 从 Markdown 正文里抽取 BibTeX 条目（含藏在 HTML 注释里的写法），
+ * 让「文献库直接写进 md」成为可能——示例文件就是这么自带参考文献的。
+ */
+function extractInlineBib(md) {
+  const s = String(md || '');
+  const out = [];
+  const re = /@([a-zA-Z]+)\s*\{/g;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    const type = m[1].toLowerCase();
+    if (type === 'comment' || type === 'string' || type === 'preamble') continue;
+    let depth = 0;
+    let end = -1;
+    for (let i = m.index + m[0].length - 1; i < s.length; i++) {
+      if (s[i] === '{') depth++;
+      else if (s[i] === '}') {
+        depth--;
+        if (depth === 0) { end = i; break; }
+      }
+    }
+    if (end < 0) continue;
+    out.push(s.slice(m.index, end + 1));
+    re.lastIndex = end + 1;
+  }
+  return out.join('\n');
+}
+
+/** 文献库来源：界面导入的 .bib → md 同目录的 references.bib → md 正文/注释里的 BibTeX */
 function buildRegistry(opts, log) {
+  const sources = [];
   let text = String(opts.bibText || '');
-  if (!text.trim() && opts.mdPath) {
+  if (text.trim()) sources.push({ name: '界面导入', text });
+  if (opts.mdPath) {
     const guess = path.join(path.dirname(opts.mdPath), 'references.bib');
     try {
-      if (fs.existsSync(guess)) text = fs.readFileSync(guess, 'utf8');
+      if (fs.existsSync(guess)) sources.push({ name: 'references.bib', text: fs.readFileSync(guess, 'utf8') });
     } catch (e) { /* 可选 */ }
   }
-  if (!text.trim()) return null;
-  const parsed = bib.parseBib(text);
-  const keys = Object.keys(parsed.entries || {});
+  const inline = extractInlineBib(opts.mdContent);
+  if (inline.trim()) sources.push({ name: 'md 内嵌', text: inline });
+  if (!sources.length) return null;
+
+  const merged = {};
+  const warnings = [];
+  for (const src of sources) {
+    const parsed = bib.parseBib(src.text);
+    Object.assign(merged, parsed.entries || {});
+    if (parsed.warnings && parsed.warnings.length) warnings.push(...parsed.warnings);
+  }
+  const keys = Object.keys(merged);
   if (!keys.length) {
-    if (parsed.warnings && parsed.warnings.length) log(`⚠ 文献库解析告警：${parsed.warnings.slice(0, 3).join('；')}`);
+    if (warnings.length) log(`⚠ 文献库解析告警：${warnings.slice(0, 3).join('；')}`);
     return null;
   }
-  log(`已载入文献库：${keys.length} 条${parsed.warnings.length ? `（${parsed.warnings.length} 条告警）` : ''}`);
-  return bib.makeRegistry(parsed.entries);
+  log(`已载入文献库：${keys.length} 条（来源：${sources.map((s) => s.name).join(' + ')}）`);
+  return bib.makeRegistry(merged);
 }
 
 function styleNameOf(styleId) {
@@ -110,6 +149,7 @@ async function runGenerate(opts, onProgress, deps = {}) {
     searchDirs: deps.searchDirs || [],
     overlayMode: opts.overlayMode,
     sectionNumbers: parsed.stats.useSectionNumbers,
+    styles: deps.styles || null,
     formulaMode: opts.formulaMode,
     animation: opts.animation,
     footer: opts.footer,
@@ -145,3 +185,4 @@ async function runGenerate(opts, onProgress, deps = {}) {
 }
 
 module.exports = { runGenerate };
+

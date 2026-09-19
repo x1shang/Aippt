@@ -364,3 +364,17 @@ body {
   .layout { grid-template-columns: 1fr; }
   .preview-body { max-height: 480px; }
 }
+
+/* 样式插件标记 */
+.style-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: #7c3aed;
+  vertical-align: middle;
+}
+

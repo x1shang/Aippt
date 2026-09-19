@@ -1,0 +1,24 @@
+{
+  "$schema": "aippt-style/1",
+  "id": "midnight-neon",
+  "name": "午夜霓虹",
+  "desc": "深色底 · 青紫霓虹，适合技术分享与直播",
+  "author": "AIPPT 官方示例",
+  "version": "1",
+  "font": "Microsoft YaHei",
+  "mono": "JetBrains Mono, Consolas",
+  "colors": {
+    "primary": "#22D3EE",
+    "accent": "#A855F7",
+    "text": "#E5E7EB",
+    "textSub": "#94A3B8",
+    "bg": "#0B1020",
+    "bgAlt": "#141A2E",
+    "coverBg": "#070A14",
+    "coverText": "#F8FAFC",
+    "coverSub": "#7DD3FC",
+    "deco1": "#22D3EE",
+    "deco2": "#A855F7"
+  },
+  "layout": { "titleSize": 26, "bodySize": 15, "marginX": 0.95, "radius": 10, "navMax": 8 }
+}

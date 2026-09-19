@@ -1,0 +1,24 @@
+{
+  "$schema": "aippt-style/1",
+  "id": "beamer-academic",
+  "name": "Beamer 学术",
+  "desc": "衬线 · 深蓝 · 米白，最接近 LaTeX 论文的观感",
+  "author": "AIPPT 官方示例",
+  "version": "1",
+  "font": "Latin Modern Roman, Cambria, 宋体, SimSun",
+  "mono": "Latin Modern Mono, Consolas",
+  "colors": {
+    "primary": "#1B3A6B",
+    "accent": "#B8860B",
+    "text": "#111827",
+    "textSub": "#5B6B7C",
+    "bg": "#FDFCF8",
+    "bgAlt": "#EEF2F8",
+    "coverBg": "#0E2440",
+    "coverText": "#F7F5EF",
+    "coverSub": "#A8C0DC",
+    "deco1": "#1B3A6B",
+    "deco2": "#B8860B"
+  },
+  "layout": { "titleSize": 26, "bodySize": 15, "marginX": 1.05, "radius": 2, "navMax": 10 }
+}

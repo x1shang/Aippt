@@ -226,14 +226,7 @@ function extractAnimTargets(xml) {
     const idMatch = /<p:cNvPr id="(\d+)"/.exec(spXml);
     const spid = idMatch ? +idMatch[1] : null;
     const step = Math.max.apply(null, ids);
-    let next = spXml;
-    // 删掉标记 run：标记一定是独立 run（生成期单独加进去的）
-    next = next.replace(/<a:r>\s*<a:rPr[\s\S]*?<\/a:rPr>\s*<a:t[^>]*>⟦ANIM:\d+⟧<\/a:t>\s*<\/a:r>/g, '')
-      .replace(/<a:r><a:t[^>]*>⟦ANIM:\d+⟧<\/a:t><\/a:r>/g, '');
-    if (next.includes('⟦ANIM:')) {
-      // 兜底：直接清掉残留标记文本
-      next = next.replace(/⟦ANIM:\d+⟧/g, '');
-    }
+    const next = stripAnimMarkers(spXml);
     stripped += ids.length;
     if (spid != null) {
       byStep[step] = byStep[step] || [];
@@ -244,11 +237,39 @@ function extractAnimTargets(xml) {
   return { xml: out, byStep, stripped };
 }
 
+/**
+ * 摘掉 ⟦ANIM:n⟧ 标记 run（保留该形状里的正文）。
+ *
+ * ⚠️ 必须按 run 逐个扫描，**不能**用一个跨 run 的正则：
+ *   PptxGenJS 在每个 run 前都会插一段 `<a:pPr>`，所以形状里长这样：
+ *     <a:r><a:rPr/><a:t>▪  </a:t></a:r><a:pPr/><a:r><a:rPr/><a:t>要点文字</a:t></a:r>…<a:r>…⟦ANIM:2⟧…</a:r>
+ *   用 `<a:r>…[\s\S]*?…<a:t>⟦ANIM:n⟧</a:t>…</a:r>` 这类写法时，正则引擎会从**第一个** `<a:r>`
+ *   一路吃到标记所在的 run，把本该显示的正文整段删掉——症状正是"能点击，但什么都不出现"。
+ */
+function stripAnimMarkers(spXml) {
+  const re = /<a:r(?:\s[^>]*)?>[\s\S]*?<\/a:r>/g;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = re.exec(spXml)) !== null) {
+    const runXml = m[0];
+    if (!runXml.includes('⟦ANIM:')) continue;
+    const cleaned = runXml.replace(/⟦ANIM:\d+⟧/g, '');
+    const texts = [...cleaned.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g)].map((x) => x[1]).join('');
+    out += spXml.slice(last, m.index);
+    if (texts.trim()) out += cleaned;   // 同一 run 里还有正文 → 只去掉标记文本
+    // 整个 run 只有标记 → 连 run 一起丢掉
+    last = m.index + runXml.length;
+  }
+  out += spXml.slice(last);
+  return out;
+}
+
 /** 生成一段"出现"效果（Appear：presetID=1, presetClass=entr, presetSubtype=0） */
-function effectPar(id, spid, nodeType) {
+function effectPar(id, innerId, spid, nodeType) {
   return `<p:par><p:cTn id="${id}" presetID="1" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="${nodeType}">`
     + '<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>'
-    + `<p:set><p:cBhvr><p:cTn id="${id + 1}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>`
+    + `<p:set><p:cBhvr><p:cTn id="${innerId}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>`
     + `<p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl>`
     + '<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr>'
     + '<p:to><p:strVal val="visible"/></p:to></p:set>'
@@ -257,36 +278,50 @@ function effectPar(id, spid, nodeType) {
 
 /**
  * 按步生成 <p:timing>：第 1 步的内容一开始就可见，从第 2 步起每次点击出现一组。
+ *
+ * ⚠️ 两个必须照抄真实放映器的细节（用 WPS 自己生成的动画稿当参照物对比出来的）：
+ *   1. `<p:bldLst><p:bldP spid="…" grpId="0"/></p:bldLst>` **不能省**——
+ *      没有构建列表时，放映器会"点得动但什么都不出现"（动画条目没被识别）。
+ *   2. cTn 的 id 按文档顺序连续编号（1,2,3…），与放映器自己写出来的一致。
  * @param {Object<number, number[]>} byStep
  */
 function buildTiming(byStep) {
   const steps = Object.keys(byStep).map(Number).filter((s) => s >= 2).sort((a, b) => a - b);
   if (!steps.length) return '';
-  let id = 2;
-  const take = (n) => { const v = id; id += n; return v; };
+  let seq = 0;
+  const nextId = () => (seq += 1);
 
-  const clickGroups = steps.map((s) => {
-    const spids = byStep[s];
-    const outer = take(1);
-    const mid = take(1);
-    const inner = spids.map((spid, i) => {
-      const eid = take(2);
-      return effectPar(eid, spid, i === 0 ? 'clickEffect' : 'withEffect');
+  const rootId = nextId();
+  const mainId = nextId();
+  const clickGroups = [];
+  const blds = [];
+  for (const s of steps) {
+    const outer = nextId();
+    const mid = nextId();
+    const inner = byStep[s].map((spid, i) => {
+      const effId = nextId();
+      const setId = nextId();
+      blds.push(spid);
+      return effectPar(effId, setId, spid, i === 0 ? 'clickEffect' : 'withEffect');
     }).join('');
-    return `<p:par><p:cTn id="${outer}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>`
+    clickGroups.push(`<p:par><p:cTn id="${outer}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>`
       + `<p:par><p:cTn id="${mid}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>${inner}</p:childTnLst></p:cTn></p:par>`
-      + '</p:childTnLst></p:cTn></p:par>';
-  }).join('');
+      + '</p:childTnLst></p:cTn></p:par>');
+  }
 
-  const seqId = take(1);
-  const rootId = take(1);
+  const bldLst = blds.length
+    ? `<p:bldLst>${blds.map((spid) => `<p:bldP spid="${spid}" grpId="0"/>`).join('')}</p:bldLst>`
+    : '';
+
   return `<p:timing><p:tnLst><p:par><p:cTn id="${rootId}" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>`
-    + `<p:seq concurrent="1" nextAc="seek"><p:cTn id="${seqId}" dur="indefinite" nodeType="mainSeq"><p:childTnLst>`
-    + clickGroups
+    + `<p:seq concurrent="1" nextAc="seek"><p:cTn id="${mainId}" dur="indefinite" nodeType="mainSeq"><p:childTnLst>`
+    + clickGroups.join('')
     + '</p:childTnLst></p:cTn>'
     + '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>'
     + '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'
-    + '</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>';
+    + '</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>'
+    + bldLst
+    + '</p:timing>';
 }
 
 /** 把 <p:timing> 插到 </p:sld> 前（CT_Slide 里 timing 必须排在 cSld/clrMapOvr/transition 之后） */

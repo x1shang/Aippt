@@ -17,6 +17,11 @@ contextBridge.exposeInMainWorld('aippt', {
     ipcRenderer.on('gen:progress', (_e, msg) => cb(msg));
   },
   getAppInfo: () => ipcRenderer.invoke('app:info'),
+  getSampleMd: () => ipcRenderer.invoke('sample:md'),
+  listStyles: () => ipcRenderer.invoke('styles:list'),
+  importStyle: () => ipcRenderer.invoke('styles:import'),
+  removeStyle: (id) => ipcRenderer.invoke('styles:remove', id),
+  exportStyle: (id) => ipcRenderer.invoke('styles:export', id),
   /** 拖拽文件的真实磁盘路径（图片相对路径需按 md 所在目录解析） */
   getPathForFile: (file) => {
     try {
@@ -26,3 +31,4 @@ contextBridge.exposeInMainWorld('aippt', {
     }
   }
 });
+

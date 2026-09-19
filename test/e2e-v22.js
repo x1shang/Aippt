@@ -178,6 +178,25 @@ async function main() {
   }
   ok('动画目标形状都真实存在（避免 PowerPoint 报修复）', spidOk, spidDetail);
 
+  // 回归：被点出来的形状里必须**仍然有正文**（曾经被跨 run 的正则连正文一起删掉，
+  // 症状是"能点击但什么都不出现"）
+  let animTextOk = true;
+  const animTextDetail = [];
+  for (const x of xmls) {
+    const targets = [...x.matchAll(/<p:spTgt spid="(\d+)"/g)].map((m) => m[1]);
+    if (!targets.length) continue;
+    // 逐个切 <p:sp>…</p:sp>（不要用带负向断言的嵌套量词，会灾难性回溯把测试卡死）
+    const spBlocks = [...x.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)].map((m) => m[0]);
+    for (const t of targets) {
+      const sp = spBlocks.find((b) => b.includes(`<p:cNvPr id="${t}"`)) || '';
+      const texts = [...sp.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g)].map((mm) => mm[1]).join('');
+      if (!texts.trim()) { animTextOk = false; animTextDetail.push(`spid=${t} 无文字`); }
+      if (/⟦ANIM:/.test(sp)) { animTextOk = false; animTextDetail.push(`spid=${t} 残留标记`); }
+    }
+  }
+  ok('被"点出来"的形状里保留了正文（不是空文本框）', animTextOk, animTextDetail.join(';'));
+  ok('bldLst 构建列表存在（缺它放映器点得动但不出现）', /<p:bldLst>/.test(xmls.join('')));
+
   // 目录页码回填 + 页脚（注意：封面副标题里也可能出现"目录"二字，用"共 N 节"定位目录页）
   const tocPage = xmls.find((x) => /共 \d+ 节/.test(x));
   ok('目录页存在', !!tocPage);

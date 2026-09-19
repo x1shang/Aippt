@@ -30,6 +30,20 @@ const LAYOUT = {
   contentBottom: 6.92,
   pageNoY: 7.08
 };
+const LAYOUT_BASE = Object.assign({}, LAYOUT);
+
+/**
+ * 样式插件可以覆盖少量版式参数（边距/圆角/导航条节数上限）。
+ * 生成期间临时改写模块级 LAYOUT，生成结束（finally）恢复，避免影响到下一次生成。
+ */
+function applyStyleLayout(style) {
+  const conf = (style && style.layout) || {};
+  if (Number.isFinite(conf.marginX)) {
+    LAYOUT.marginX = conf.marginX;
+    LAYOUT.contentW = W - conf.marginX * 2;
+  }
+  return () => { Object.assign(LAYOUT, LAYOUT_BASE); };
+}
 
 const BODY_FONT_PT = 15;      // 富内容正文字号
 const TITLE_FONT_PT = 26;
@@ -144,13 +158,13 @@ function drawTitleBar(slide, style, title, subtitle, titleImage, ctx) {
       for (const r of runs) r.options = { ...r.options, bold: true };
       slide.addText(runs, {
         x: 1.2, y: 0.62, w: 11.1, h: 0.75,
-        fontFace: style.font, fontSize: TITLE_FONT_PT, bold: true, color: style.text,
+        fontFace: style.font, fontSize: (ctx && ctx.titlePt) || TITLE_FONT_PT, bold: true, color: style.text,
         align: 'left', valign: 'middle', fit: 'shrink', margin: 0
       });
     } else {
       slide.addText(title, {
         x: 1.2, y: 0.62, w: 11.1, h: 0.75,
-        fontFace: style.font, fontSize: TITLE_FONT_PT, bold: true, color: style.text,
+        fontFace: style.font, fontSize: (ctx && ctx.titlePt) || TITLE_FONT_PT, bold: true, color: style.text,
         align: 'left', valign: 'middle', fit: 'shrink', margin: 0
       });
     }
@@ -183,7 +197,7 @@ function drawFooter(slide, style, ctx, index, opts) {
   if (wantNav && ctx && ctx.showFooter && nav && nav.titles.length >= 2) {
     const cur = nav.current;
     const runs = [];
-    if (nav.titles.length <= NAV_MAX_SECTIONS) {
+    if (nav.titles.length <= ((ctx && ctx.navMax) || NAV_MAX_SECTIONS)) {
       nav.titles.forEach((t, i) => {
         if (i) runs.push({ text: '  ·  ', options: { color: tint(style.textSub, 0.45), fontFace: style.font, fontSize: 8 } });
         runs.push({
@@ -556,7 +570,7 @@ function collectTextLines(blocks) {
  *   anim=true：不按步过滤，全部画出并给第 2 步起的内容打 ⟦ANIM:n⟧ 标记（生成后变成点击出现动画）
  */
 function drawOmmlGroup(slide, style, group, ctx, o) {
-  const fontPt = BODY_FONT_PT + 2;
+  const fontPt = (ctx && ctx.bodyPt ? ctx.bodyPt : BODY_FONT_PT) + 2;
   const usableIn = LAYOUT.contentW - 0.2;
   const step = (o && o.step) || 1;
   const mode = (o && o.mode) || 'hide';
@@ -1061,9 +1075,25 @@ async function rasterizeSvg(svgText, ctx) {
 // 四、主入口
 // ============================================================
 
+/**
+ * 入口：先按样式插件应用版式参数，生成结束后恢复（避免污染下一次生成）
+ */
 async function generatePptx(slides, styleId, outPath, options = {}) {
+  const stylePool = (options.styles && options.styles.length) ? options.styles : STYLES;
+  const style = stylePool.find((s) => s.id === styleId) || stylePool[0];
+  const restore = applyStyleLayout(style);
+  try {
+    return await generatePptxInner(slides, styleId, outPath, options);
+  } finally {
+    restore();
+  }
+}
+
+async function generatePptxInner(slides, styleId, outPath, options = {}) {
   if (!Array.isArray(slides) || !slides.length) throw new Error('没有可生成的幻灯片内容');
-  const style = STYLES.find((s) => s.id === styleId) || STYLES[0];
+  const stylePool = (options.styles && options.styles.length) ? options.styles : STYLES;
+  const style = stylePool.find((s) => s.id === styleId) || stylePool[0];
+  const restoreLayout = applyStyleLayout(style);
   const total = slides.length;
 
   fs.mkdirSync(path.dirname(path.resolve(outPath)), { recursive: true });
@@ -1101,6 +1131,9 @@ async function generatePptx(slides, styleId, outPath, options = {}) {
     tokens: {},                                      // 生成后统一替换的文本标记（目录页码等）
     tocEntries: slides.tocEntries || (slides[0] && slides[0].tocEntries) || [],
     tocPages: {},
+    titlePt: (style.layout && style.layout.titleSize) || TITLE_FONT_PT,
+    bodyPt: (style.layout && style.layout.bodySize) || BODY_FONT_PT,
+    navMax: (style.layout && style.layout.navMax) || NAV_MAX_SECTIONS,
     sectionNav: { titles: [], current: 0 },
     currentSection: -1,
     pageIndex: 0,
@@ -1426,5 +1459,6 @@ async function generatePptx(slides, styleId, outPath, options = {}) {
 }
 
 module.exports = { generatePptx, tint, W, H, LAYOUT, loadImage, findImageFile, patchPageTotals, TOTAL_SENTINEL };
+
 
 

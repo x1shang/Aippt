@@ -11,6 +11,8 @@ const fs = require('fs');
 const { runGenerate } = require('./generate-flow.js');
 const { testConnection } = require('./ai.js');
 const { RichRenderer } = require('./rich-renderer.js');
+const styleStore = require('./style-store.js');
+const { STYLES } = require('../shared/styles.js');
 
 const MAX_MD_BYTES = 2 * 1024 * 1024; // 2MB
 
@@ -190,8 +192,8 @@ function createWindow() {
             console.error('AIPPT_SMOKE_OMML_ERROR ' + e.message);
           }
 
-          const ok = result.steps === 4 && result.styles === 6 && result.api === 'object' &&
-            result.previewCount === 8 && result.notesShown === 7 && result.fileOk === true &&
+          const ok = result.steps === 4 && result.styles >= 6 && result.api === 'object' &&   // 内置 6 套 + 任意样式插件
+            result.previewCount === 11 && result.notesShown === 4 && result.fileOk === true &&
             result.slideCount === 3 && outExists && result.errs.length === 0 &&
             // 冒烟文档：封面 + 公式 + 表格 + 定理 = 4 页，渐进显示 2 步 = 共 6 页；渲染图 ≥ 3 张
             mathMedia >= 3 && mathSlides >= 6 && hljsOk === true &&
@@ -239,6 +241,40 @@ ipcMain.handle('app:info', () => ({
   platform: process.platform
 }));
 
+/** 内置示例：读 examples/showcase.md（打包后从 asar 里读），读不到时退回内置文本 */
+ipcMain.handle('sample:md', () => {
+  const candidates = [
+    path.join(__dirname, '..', 'examples', 'showcase.md'),
+    path.join(process.resourcesPath || '', 'app', 'examples', 'showcase.md')
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return { name: 'showcase.md', content: fs.readFileSync(p, 'utf8') };
+    } catch (e) { /* 继续尝试 */ }
+  }
+  return { name: '示例.md', content: FALLBACK_SAMPLE_MD };
+});
+
+const FALLBACK_SAMPLE_MD = [
+  '# AIPPT 功能总览',
+  '',
+  '一份 Markdown，导出可编辑、可点击、带目录与文献的 PPT',
+  '',
+  '\\tableofcontents',
+  '',
+  '## 公式',
+  '',
+  '行内公式 $E = mc^2$ 与文字同段混排。',
+  '',
+  '$$',
+  '\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}',
+  '$$',
+  '',
+  '## 谢谢观看',
+  '',
+  '欢迎交流！'
+].join('\n');
+
 ipcMain.handle('dialog:open-md', async () => {
   const r = await dialog.showOpenDialog(mainWindow, {
     title: '选择 Markdown 文件',
@@ -273,6 +309,77 @@ ipcMain.handle('dialog:save-pptx', async (_e, defaultName) => {
   return r.filePath.endsWith('.pptx') ? r.filePath : `${r.filePath}.pptx`;
 });
 
+/** 样式插件：随包 styles/ + 用户目录 styles/ */
+function styleDirs() {
+  const dirs = [path.join(__dirname, '..', 'styles')];
+  try {
+    dirs.push(path.join(app.getPath('userData'), styleStore.SUB_DIR));
+  } catch (e) { /* userData 不可用时只读随包样式 */ }
+  return dirs;
+}
+
+function loadAllStyles() {
+  return styleStore.loadStyles({ dirs: styleDirs(), builtin: STYLES });
+}
+
+ipcMain.handle('styles:list', () => {
+  const r = loadAllStyles();
+  return {
+    styles: r.styles.map((s) => ({
+      id: s.id,
+      name: s.name,
+      desc: s.desc,
+      font: s.font,
+      primary: s.primary,
+      accent: s.accent,
+      bg: s.bg,
+      coverBg: s.coverBg,
+      custom: !!s.custom,
+      layout: s.layout || null
+    })),
+    warnings: r.warnings
+  };
+});
+
+ipcMain.handle('styles:import', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, {
+    title: '导入样式插件（*.aippt-style.json）',
+    filters: [{ name: 'AIPPT 样式', extensions: ['json'] }, { name: '所有文件', extensions: ['*'] }],
+    properties: ['openFile']
+  });
+  if (r.canceled || !r.filePaths.length) return { canceled: true };
+  const src = r.filePaths[0];
+  const picked = styleStore.readStyleFile(src);
+  if (!picked.ok) return { ok: false, errors: picked.errors, warnings: picked.warnings };
+  if (STYLES.some((s) => s.id === picked.style.id)) {
+    return { ok: false, errors: [`样式 id「${picked.style.id}」与内置样式重名，请换一个 id 再导入`] };
+  }
+  const res = styleStore.importStyle(src, path.join(app.getPath('userData'), styleStore.SUB_DIR));
+  return res.ok ? { ok: true, style: res.style } : { ok: false, errors: res.errors };
+});
+
+ipcMain.handle('styles:remove', (_e, id) => {
+  return styleStore.removeStyle(id, path.join(app.getPath('userData'), styleStore.SUB_DIR));
+});
+
+ipcMain.handle('styles:export', async (_e, id) => {
+  const r = loadAllStyles();
+  const st = r.styles.find((s) => s.id === id);
+  if (!st) return { ok: false, errors: ['找不到该样式'] };
+  const dlg = await dialog.showSaveDialog(mainWindow, {
+    title: '导出样式插件（可改完再导入）',
+    defaultPath: `${st.id}.aippt-style.json`,
+    filters: [{ name: 'AIPPT 样式', extensions: ['json'] }]
+  });
+  if (dlg.canceled || !dlg.filePath) return { canceled: true };
+  try {
+    fs.writeFileSync(dlg.filePath, styleStore.exportStyle(st), 'utf8');
+    return { ok: true, path: dlg.filePath };
+  } catch (e) {
+    return { ok: false, errors: [String(e.message || e)] };
+  }
+});
+
 ipcMain.handle('dialog:open-bib', async () => {
   const r = await dialog.showOpenDialog(mainWindow, {
     title: '选择 BibTeX 文献库',
@@ -301,7 +408,8 @@ ipcMain.handle('generate', async (_e, payload) => {
     sendProgress('正在准备公式渲染引擎…');
     const renderer = await getRenderer();
     const searchDirs = [process.cwd(), path.dirname(process.execPath)];
-    return await runGenerate(payload, sendProgress, { renderer, searchDirs });
+    const styleInfo = loadAllStyles();
+    return await runGenerate(payload, sendProgress, { renderer, searchDirs, styles: styleInfo.styles });
   } finally {
     busy = false;
   }
@@ -349,3 +457,6 @@ if (!gotLock) {
     }
   });
 }
+
+
+

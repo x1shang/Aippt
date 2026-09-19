@@ -1,0 +1,23 @@
+{
+  "$schema": "aippt-style/1",
+  "id": "paper-ink",
+  "name": "水墨论文",
+  "desc": "极简灰度 · 墨色点缀，打印与评审友好",
+  "author": "AIPPT 官方示例",
+  "version": "1",
+  "font": "Source Han Serif SC, 宋体, SimSun",
+  "mono": "Consolas",
+  "basedOn": "minimal-gray",
+  "colors": {
+    "primary": "#2F3E46",
+    "accent": "#A23E48",
+    "text": "#1F2933",
+    "textSub": "#6B7A85",
+    "bg": "#FFFFFF",
+    "bgAlt": "#F5F3EF",
+    "coverBg": "#2F3E46",
+    "coverText": "#F7F5F0",
+    "coverSub": "#B9C2C8"
+  },
+  "layout": { "titleSize": 25, "bodySize": 14, "marginX": 1.1, "radius": 0, "navMax": 12 }
+}

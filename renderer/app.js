@@ -8,81 +8,34 @@
 
   const $ = (id) => document.getElementById(id);
   const parser = window.AIPPT.parser;
-  const STYLES = window.AIPPT.styles.STYLES;
+  // 样式表：启动时用 IPC 拉取"内置 + 样式插件"；这里先用内置作为初值
+  let STYLES = window.AIPPT.styles.STYLES;
 
   const LAYOUT_LABEL = {
     cover: '封面', section: '章节', content: '内容',
     'two-column': '双栏', quote: '金句', end: '结尾'
   };
 
-  const SAMPLE_MD = `# 让 AI 成为你的创作伙伴
-
-一份关于智能写作工具的产品发布演示
-
-> 开场注意：先讲行业趋势，再引出产品，最后现场演示。
-
-## 为什么现在需要 AI 写作
-
-- 信息爆炸，人工创作效率遇到瓶颈
-- 通用大模型能力快速提升，成本持续下降
-- 创作者需要的是"助手"而非"替代"
-
-> 引用 Gartner 预测时注意数据口径：2025 年 vs 2028 年。
-
-## 我们的解决方案
-
-- **智能起草**：一句话生成初稿，命中率 90% 以上
-- **风格对齐**：学习你的历史文风，输出一致
-- **多语言支持**：中英日韩一键互译
-
-> 演示环节：现场用 30 秒生成一篇产品文案。
-
-## 技术架构
-
-\`\`\`
-输入层   →  Prompt 编排 + 知识库检索
-模型层   →  多模型路由（质量/速度/成本）
-输出层   →  结构化 JSON → 富文本渲染
-\`\`\`
-
-> 架构图建议用深色背景，突出三层链路。
-
-## 效果量化
-
-首 token 延迟 $t_{p50}$ 与吞吐量满足：
-
-$$
-t_{p50} = \frac{L}{v} + t_0, \qquad v = \frac{n_{\text{tok}}}{\Delta t}
-$$
-
-并发 200 时的平均响应时间与成功率：
-
-| 场景 | 延迟 $t_{p50}$ | 成功率 |
-| :--- | ---: | ---: |
-| 单轮起草 | 0.8 s | 99.2% |
-| 长文改写 | 2.4 s | 97.5% |
-表：实测性能指标
-
-## 客户反馈
-
-> 一图胜千言：贴一张客户增长曲线。
-
-"上线三个月，团队内容产能提升了 4 倍。" —— 某头部电商 CMO
-
-## 未来路线图
-
-- 2025 Q3：企业私有化部署
-- 2025 Q4：多模态（图文混排）创作
-- 2026 Q1：Agent 工作流编排
-
-> 路线图时间点以官方公告为准。
-
-## 谢谢观看
-
-欢迎现场交流，也欢迎到展台体验！
-
-> 结尾记得引导用户扫码关注公众号。`;
-
+  // 兜底示例（正式示例是 examples/showcase.md，通过 IPC 读取，可在文件里直接改）
+  const SAMPLE_MD = [
+    '# AIPPT 功能总览',
+    '',
+    '一份 Markdown，导出可编辑、可点击、带目录与文献的 PPT',
+    '',
+    '\\tableofcontents',
+    '',
+    '## 公式',
+    '',
+    '行内公式 $E = mc^2$ 与文字同段混排，双击即可编辑。',
+    '',
+    '$$',
+    '\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}',
+    '$$',
+    '',
+    '## 谢谢观看',
+    '',
+    '欢迎交流！'
+  ].join('\n');
   // ---------- 状态 ----------
   const state = {
     cfg: loadCfg(),
@@ -148,6 +101,21 @@ $$
   }
 
   // ---------- 样式卡片 ----------
+  /** 拉取（内置 + 插件）样式表；失败时保留内置 */
+  async function loadStylesFromMain() {
+    try {
+      const r = await window.aippt.listStyles();
+      if (r && r.styles && r.styles.length) {
+        STYLES = r.styles;
+        if (!STYLES.some((s) => s.id === state.styleId)) state.styleId = STYLES[0].id;
+        buildStyleGrid();
+        const custom = STYLES.filter((s) => s.custom).length;
+        if (custom) $('styleHint').textContent = `已载入 ${custom} 个样式插件（可在下方导入 / 导出）`;
+      }
+      if (r && r.warnings && r.warnings.length) appendLog('⚠ 样式插件：' + r.warnings.join('；'), 'err');
+    } catch (e) { /* 保留内置样式 */ }
+  }
+
   function buildStyleGrid() {
     const grid = $('styleGrid');
     grid.textContent = '';
@@ -188,6 +156,12 @@ $$
       const name = document.createElement('div');
       name.className = 'style-name';
       name.textContent = s.name;
+      if (s.custom) {
+        const badge = document.createElement('span');
+        badge.className = 'style-badge';
+        badge.textContent = '插件';
+        name.appendChild(badge);
+      }
       const desc = document.createElement('div');
       desc.className = 'style-desc';
       desc.textContent = s.desc;
@@ -196,6 +170,14 @@ $$
       card.addEventListener('click', () => {
         state.styleId = s.id;
         grid.querySelectorAll('.style-card').forEach((c) => c.classList.toggle('selected', c.dataset.id === s.id));
+        if ($('styleHint')) $('styleHint').textContent = `当前样式：${s.name}（${s.desc}）`;
+      });
+      card.addEventListener('contextmenu', async (e) => {
+        // 右键：导出这个样式为 JSON，改完再导入就是自己的插件
+        e.preventDefault();
+        const r = await window.aippt.exportStyle(s.id);
+        if (r && r.ok) toast('已导出样式：' + r.path);
+        else if (r && r.errors) toast(r.errors[0], true);
       });
       grid.appendChild(card);
     });
@@ -490,7 +472,14 @@ $$
     });
 
     $('btnClearMd').addEventListener('click', clearMd);
-    $('btnSample').addEventListener('click', () => applyMd('示例.md', SAMPLE_MD));
+    $('btnSample').addEventListener('click', async () => {
+      // 示例是 examples/showcase.md（可编辑的真实文件），读不到才用内置兜底文本
+      try {
+        const s = await window.aippt.getSampleMd();
+        if (s && s.content) { applyMd(s.name || '示例.md', s.content); return; }
+      } catch (e) { /* 落入兜底 */ }
+      applyMd('示例.md', SAMPLE_MD);
+    });
 
     $('btnToggleKey').addEventListener('click', () => {
       const inp = $('inApiKey');
@@ -546,6 +535,24 @@ $$
     $('chkToc').addEventListener('change', (e) => { state.autoToc = e.target.checked; });
     $('chkFooter').addEventListener('change', (e) => { state.footer = e.target.checked; });
 
+    $('btnImportStyle').addEventListener('click', async () => {
+      const r = await window.aippt.importStyle();
+      if (!r || r.canceled) return;
+      if (!r.ok) { toast((r.errors && r.errors[0]) || '导入失败', true); return; }
+      toast(`已导入样式「${r.style.name}」`);
+      await loadStylesFromMain();
+    });
+
+    $('btnRemoveStyle').addEventListener('click', async () => {
+      const cur = STYLES.find((s) => s.id === state.styleId);
+      if (!cur || !cur.custom) { toast('请先选中一个「插件」样式', true); return; }
+      const r = await window.aippt.removeStyle(cur.id);
+      if (!r || !r.ok) { toast((r && r.errors && r.errors[0]) || '删除失败', true); return; }
+      toast(`已删除样式「${cur.name}」`);
+      state.styleId = STYLES[0].id;
+      await loadStylesFromMain();
+    });
+
     $('btnPickBib').addEventListener('click', async () => {
       const r = await window.aippt.chooseBibPath();
       if (!r || r.canceled) return;
@@ -591,4 +598,7 @@ $$
   // ---------- 启动 ----------
   bind();
   buildStyleGrid();
+  loadStylesFromMain();   // 拉取「内置 + 样式插件」样式表并重建样式卡片
 })();
+
+

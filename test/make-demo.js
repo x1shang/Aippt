@@ -13,6 +13,7 @@ const { RichRenderer } = require('../main/rich-renderer.js');
 const { runGenerate } = require('../main/generate-flow.js');
 
 const MD = path.join(__dirname, '..', 'examples', 'beamer-demo.md');
+const SHOWCASE = path.join(__dirname, '..', 'examples', 'showcase.md');
 const OUT_DIR = path.join(__dirname, 'out');
 
 async function main() {
@@ -44,6 +45,27 @@ async function main() {
     console.log(`\n=== ${m.desc} → ${m.name}（${res.slideCount} 页）===`);
     for (const l of logs) console.log('  · ' + l);
   }
+  // 内置示例（界面「载入示例 Markdown」用的就是它）
+  const scOut = path.join(OUT_DIR, 'showcase.pptx');
+  const scLogs = [];
+  const scRes = await runGenerate(
+    {
+      mdContent: fs.readFileSync(SHOWCASE, 'utf8'),
+      mdPath: SHOWCASE,
+      styleId: 'tech-blue',
+      mode: 'direct',
+      outPath: scOut,
+      formulaMode: 'omml-fallback',
+      animation: true,
+      autoToc: true,
+      footer: true
+    },
+    (s) => scLogs.push(s),
+    { renderer }
+  );
+  console.log(`\n=== 内置示例 showcase.md → showcase.pptx（${scRes.slideCount} 页）===`);
+  for (const l of scLogs) console.log('  · ' + l);
+
   renderer.dispose();
   app.exit(0);
 }
@@ -52,3 +74,6 @@ app.on('window-all-closed', () => {});
 app.whenReady().then(() => {
   main().catch((e) => { console.error('生成演示稿失败：', e); app.exit(1); });
 });
+
+
+
