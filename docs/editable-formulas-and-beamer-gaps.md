@@ -5,6 +5,26 @@
 
 ---
 
+## ✅ 实施结果（v2.2.0：本文方案已全部落地）
+
+| 本文方案 | 落地文件 | 状态 |
+| --- | --- | --- |
+| LaTeX→OMML 转换器（自研，MIT，零依赖） | `shared/mml2omml.js`、`shared/latex2omml.js` | ✅ 复用内置 KaTeX 的 MathML 输出，**未引入 Temml**（少一个依赖） |
+| pptx 注入 + `mc:AlternateContent` 图片兜底 | `main/pptx-post.js` | ✅ 一次 zip 后处理同时完成 OMML 注入、兜底图、点击动画、页码回填 |
+| 公式三种导出方式 | `main/generator.js`（`formulaMode: image / omml / omml-fallback`）+ UI 分段控件 | ✅ 默认 `omml-fallback` |
+| §5.1 真「点击出现」动画 | `main/pptx-post.js`（`buildTiming`）+ `generator.js`（`⟦ANIM:n⟧` 标记） | ✅ 默认开启，可切回多页展开 |
+| §5.2 目录页与页脚导航 | `parser.js`（`\tableofcontents` / `autoToc`）+ `generator.js`（`drawToc` / `drawFooter`） | ✅ 目录页码生成后回填 |
+| 文献引用 | `shared/bib.js`（新写）+ `parser.js` 引用替换 + 自动参考文献页 | ✅ 61 项单测 |
+| 算法伪代码 | `parser.js`（`ALGO_ENVS` / `parseAlgoBody`）+ `rich-html.js`（`algoHtml`）+ `rich.css` | ✅ 行号/缩进/关键字着色 |
+| 顺带修掉的真 bug | `latex-compat.js`（siunitx 上下标）、`parser.js`（定理环境体内外标签互不可见） | ✅ |
+
+验证规模：核心 119 项 + 文献 61 项 + v2.2 端到端 24 项 + LaTeX 端到端 38 项 + 功能端到端 21 项 + 应用冒烟测试，全绿。
+
+**仍未验证**：本机没有 PowerPoint，OMML 与 `p:timing` 的**渲染效果**需要在真 PowerPoint 里打开
+`test/out/beamer-demo.pptx` 目视确认（结构、语义、动画目标形状存在性均已由自动测试校验）。
+
+---
+
 ## 0. 结论速览
 
 1. **两者不是同类工具**：Beamer 是"用 TeX 排版成 PDF（矢量、不可编辑）"，AIPPT 是"把 Markdown 排成可编辑 .pptx"。

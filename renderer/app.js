@@ -442,6 +442,16 @@ $$
     if (st.math) bits.push('公式 ' + st.math);
     if (st.tables) bits.push('表格 ' + st.tables);
     if (st.images) bits.push('图片 ' + st.images);
+    if (st.algorithms) bits.push('算法 ' + st.algorithms);
+    if (st.citations) bits.push('引用 ' + st.citations);
+    // v2.2：把"可编辑公式 / 动画 / 目录"的可感知结果直接写进结果卡片
+    const om = res.omml || {};
+    if (om.display || om.inline) {
+      bits.push(`可编辑公式 ${(om.display || 0) + (om.inline || 0)} 条` + (om.fallbackImages ? `（含 ${om.fallbackImages} 张兼容图）` : ''));
+    }
+    if (om.failed) bits.push(`⚠ ${om.failed} 条公式退回原文`);
+    if (res.animation && res.animation.slides) bits.push(`点击动画 ${res.animation.shapes} 处`);
+    if (res.toc && res.toc.entries) bits.push(`目录 ${res.toc.entries} 节`);
     if (res.warnings && res.warnings.length) bits.push('⚠ ' + res.warnings.length + ' 条提示');
     $('resultDesc').textContent = bits.join(' · ') +
       ' · 样式：' + ((STYLES.find((s) => s.id === state.styleId) || {}).name || '');

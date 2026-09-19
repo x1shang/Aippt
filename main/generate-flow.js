@@ -136,7 +136,11 @@ async function runGenerate(opts, onProgress, deps = {}) {
     slideCount: out.slideCount,
     mode,
     stats: parsed.stats,
-    warnings
+    warnings,
+    // v2.2：把排版统计透出去（界面结果卡片 / 冒烟自检 / 日志都用得到）
+    omml: out.omml || { display: 0, inline: 0, fallbackImages: 0, failed: 0 },
+    animation: out.animation || { slides: 0, shapes: 0 },
+    toc: out.toc || { entries: 0, pages: 0 }
   };
 }
 

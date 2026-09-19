@@ -128,8 +128,13 @@ function createWindow() {
             ''
           ].join('\n');
           const mathOut = path.join(os.tmpdir(), `aippt-smoke-math-${Date.now()}.pptx`);
+          const ommlOut = path.join(os.tmpdir(), `aippt-smoke-omml-${Date.now()}.pptx`);
           let mathMedia = 0;
           let mathSlides = 0;
+          let ommlMath = 0;
+          let ommlFallbacks = 0;
+          let animSlides = 0;
+          let ommlOk = false;
           let hljsOk = false;
           try {
             const hljs = require('highlight.js/lib/common');
@@ -153,13 +158,46 @@ function createWindow() {
           } catch (e) {
             console.error('AIPPT_SMOKE_MATH_ERROR ' + e.message);
           }
+          // v2.2 自检：打包产物里 OMML 转换 / 图片兜底 / 点击动画 / jszip 是否都真的能用
+          try {
+            const ommlMd = '# 打包自检\n\n## 公式页\n\n行内 $E=mc^2$ 与块级公式：\n\n$$\n\\sum_{n=1}^{\\infty}\\frac{1}{n^2}=\\frac{\\pi^2}{6}\n$$\n\n## 分步页\n\n- 甲\n- 乙 <2->\n- 丙 <3->\n';
+            const out2 = await runGenerate(
+              { mdContent: ommlMd, styleId: 'tech-blue', mode: 'direct', outPath: ommlOut, autoToc: false },
+              () => {},
+              { renderer: await getRenderer() }
+            );
+            const om = out2.omml || {};
+            animSlides = (out2.animation && out2.animation.slides) || 0;
+            ommlMath = (om.display || 0) + (om.inline || 0);
+            ommlFallbacks = om.fallbackImages || 0;
+            const JSZip2 = require('jszip');
+            const zip2 = await JSZip2.loadAsync(fs.readFileSync(ommlOut));
+            let a14 = 0; let alt = 0; let timing = 0; let leftover = 0; let wordNs = 0;
+            for (const n of Object.keys(zip2.files).filter((x) => /^ppt\/slides\/slide\d+\.xml$/.test(x))) {
+              const x = await zip2.file(n).async('string');
+              a14 += (x.match(/<a14:m[\s>]/g) || []).length;
+              alt += (x.match(/<mc:AlternateContent/g) || []).length;
+              timing += (x.match(/<p:timing>/g) || []).length;
+              if (/⟦MATH:|⟦ANIM:|⟪[TP]:?/.test(x)) leftover++;
+              if (/<w:/.test(x)) wordNs++;
+            }
+            ommlOk = a14 >= 2 && alt >= 1 && timing >= 1 && leftover === 0 && wordNs === 0;
+            if (!ommlOk) {
+              console.error(`AIPPT_SMOKE_OMML_DETAIL a14=${a14} alt=${alt} timing=${timing} leftover=${leftover} w=${wordNs}`);
+            }
+            fs.unlinkSync(ommlOut);
+          } catch (e) {
+            console.error('AIPPT_SMOKE_OMML_ERROR ' + e.message);
+          }
 
           const ok = result.steps === 4 && result.styles === 6 && result.api === 'object' &&
-            result.previewCount === 7 && result.notesShown === 7 && result.fileOk === true &&
+            result.previewCount === 8 && result.notesShown === 7 && result.fileOk === true &&
             result.slideCount === 3 && outExists && result.errs.length === 0 &&
             // 冒烟文档：封面 + 公式 + 表格 + 定理 = 4 页，渐进显示 2 步 = 共 6 页；渲染图 ≥ 3 张
-            mathMedia >= 3 && mathSlides >= 6 && hljsOk === true;
-          const payload = { ...result, outExists, mathMedia, mathSlides, hljsOk, ok };
+            mathMedia >= 3 && mathSlides >= 6 && hljsOk === true &&
+            // v2.2：原生公式 + 图片兜底 + 点击动画（在打包产物里也要成立）
+            ommlOk && ommlMath >= 2;
+          const payload = { ...result, outExists, mathMedia, mathSlides, hljsOk, ommlOk, ommlMath, ommlFallbacks, animSlides, ok };
           const smokeReport = path.join(os.tmpdir(), 'aippt-smoke-result.json');
           try { fs.writeFileSync(smokeReport, JSON.stringify(payload)); } catch (e) { /* ignore */ }
           console.log('AIPPT_SMOKE_RESULT ' + JSON.stringify(payload));
