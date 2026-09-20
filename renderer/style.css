@@ -24,7 +24,12 @@
 
 html, body { height: 100%; }
 
+/* 页面本身不滚动：滚动只发生在左右两栏内部 */
 body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
@@ -35,7 +40,9 @@ body {
 
 /* ---------- 顶栏 ---------- */
 .topbar {
-  position: sticky; top: 0; z-index: 50;
+  flex: 0 0 auto;
+  height: 65px;
+  position: relative; z-index: 50;
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 28px;
   background: rgba(255, 255, 255, .86);
@@ -61,19 +68,43 @@ body {
 }
 .version { font-size: 12px; color: var(--faint); }
 
-/* ---------- 布局 ---------- */
+/* ---------- 布局 ----------
+   左右两栏各自独立滚动：鼠标在哪一侧，滚轮就只滚动那一侧。
+   做法：body 不滚动 → main 占满 header 以下的高度且自身不滚动 → 两个 panel 各自 overflow-y:auto；
+   overscroll-behavior: contain 防止滚到边界后"滚动穿透"到外层。 */
 .layout {
   display: grid;
   grid-template-columns: 480px minmax(0, 1fr);
   gap: 20px;
-  padding: 20px 28px 40px;
+  padding: 20px 28px 24px;
+  width: 100%;
   max-width: 1500px;
   margin: 0 auto;
-  align-items: start;
+  flex: 1 1 auto;
+  min-height: 0;                 /* 关键：让子项的 overflow 生效 */
+  overflow: hidden;
 }
 
-.panel-left { display: flex; flex-direction: column; gap: 16px; }
-.panel-right { display: flex; flex-direction: column; gap: 16px; }
+.panel-left,
+.panel-right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 6px;            /* 给滚动条留位置，内容不贴边 */
+}
+.panel-right { padding-right: 4px; }
+
+/* 关键：两侧面板的子卡片**不允许被压缩**。
+   flex 纵列里子项默认 flex-shrink:1，一旦总高超过面板高度，浏览器会去"压扁卡片"而不是滚动；
+   卡片被压扁后内容就溢出到卡片边框外（看起来像"大纲顶出预览框"）。这里统一关掉收缩，让面板滚动。 */
+.panel-left > *,
+.panel-right > * { flex: 0 0 auto; }
 
 /* ---------- 步骤卡片 ---------- */
 .step-card, .preview-card, .result-card {
@@ -253,14 +284,27 @@ body {
 .log-line.info { color: #7DD3FC; }
 
 /* ---------- 预览区 ---------- */
-.preview-card { display: flex; flex-direction: column; min-height: 420px; }
+/* 预览卡片：自己是一个纵向 flex，正文区在**框内**滚动
+   （保持原有手感：外层面板滚动 + 框内滚动浏览大纲，两者互不干扰） */
+.preview-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+  max-height: calc(100vh - 120px);
+}
 .preview-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 20px; border-bottom: 1px solid var(--line);
 }
 .preview-head h2 { font-size: 15px; font-weight: 700; }
 .preview-stats { font-size: 12px; color: var(--faint); }
-.preview-body { padding: 16px 20px; overflow-y: auto; max-height: calc(100vh - 260px); }
+.preview-body {
+  padding: 16px 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;               /* 框内滚动：大纲不会顶出卡片 */
+  overscroll-behavior: contain;   /* 滚到边界不外溢到整页 */
+}
 
 .empty-tip { text-align: center; padding: 70px 20px; color: var(--sub); }
 .empty-icon { font-size: 44px; margin-bottom: 10px; }
@@ -361,8 +405,12 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 
 @media (max-width: 1120px) {
-  .layout { grid-template-columns: 1fr; }
-  .preview-body { max-height: 480px; }
+  /* 窄屏变成单列：左右不再并排，此时恢复"整页滚动"更自然 */
+  body { overflow: auto; height: auto; min-height: 100vh; }
+  .topbar { height: auto; }
+  .layout { grid-template-columns: 1fr; overflow: visible; flex: 0 0 auto; }
+  .panel-left, .panel-right { height: auto; overflow: visible; padding-right: 0; }
+  .preview-body { max-height: 480px; overflow-y: auto; }
 }
 
 /* 样式插件标记 */
@@ -377,4 +425,6 @@ body {
   background: #7c3aed;
   vertical-align: middle;
 }
+
+
 

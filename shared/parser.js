@@ -117,7 +117,9 @@
 
   function extractImages(text) {
     const found = [];
-    const t = String(text == null ? '' : text);
+    // 行内代码里写的图片语法是在"讲语法"，不是真要插图：
+    // 用等长的屏蔽串替换掉 `…` 内容再匹配（等长保证索引可对齐，且不会误伤周围的正常图片）
+    const t = maskInlineCode(String(text == null ? '' : text));
     let m;
     IMG_MD.lastIndex = 0;
     while ((m = IMG_MD.exec(t)) !== null) found.push({ src: m[2], alt: (m[1] || '').trim() });

@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('aippt', {
     ipcRenderer.on('gen:progress', (_e, msg) => cb(msg));
   },
   getAppInfo: () => ipcRenderer.invoke('app:info'),
-  getSampleMd: () => ipcRenderer.invoke('sample:md'),
+  getSampleMd: (kind) => ipcRenderer.invoke('sample:md', kind),
   listStyles: () => ipcRenderer.invoke('styles:list'),
   importStyle: () => ipcRenderer.invoke('styles:import'),
   removeStyle: (id) => ipcRenderer.invoke('styles:remove', id),
@@ -31,4 +31,5 @@ contextBridge.exposeInMainWorld('aippt', {
     }
   }
 });
+
 

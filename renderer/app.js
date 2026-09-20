@@ -473,13 +473,24 @@
 
     $('btnClearMd').addEventListener('click', clearMd);
     $('btnSample').addEventListener('click', async () => {
-      // 示例是 examples/showcase.md（可编辑的真实文件），读不到才用内置兜底文本
+      // 默认示例是 examples/beamer-demo.md（可编辑的真实文件）；连路径一起带进来，
+      // 示例里的 references.bib 与相对图片路径才能正确解析
       try {
-        const s = await window.aippt.getSampleMd();
-        if (s && s.content) { applyMd(s.name || '示例.md', s.content); return; }
+        const s = await window.aippt.getSampleMd('beamer');
+        if (s && s.content) { applyMd(s.name || 'beamer-demo.md', s.content, s.path || ''); return; }
       } catch (e) { /* 落入兜底 */ }
       applyMd('示例.md', SAMPLE_MD);
     });
+
+    if ($('btnSampleAll')) {
+      $('btnSampleAll').addEventListener('click', async () => {
+        try {
+          const s = await window.aippt.getSampleMd('showcase');
+          if (s && s.content) { applyMd(s.name || 'showcase.md', s.content, s.path || ''); return; }
+        } catch (e) { /* 忽略 */ }
+        toast('未找到全功能示例文件', true);
+      });
+    }
 
     $('btnToggleKey').addEventListener('click', () => {
       const inp = $('inApiKey');
@@ -600,5 +611,6 @@
   buildStyleGrid();
   loadStylesFromMain();   // 拉取「内置 + 样式插件」样式表并重建样式卡片
 })();
+
 
 

@@ -1,7 +1,7 @@
 {
   "name": "aippt",
   "productName": "AIPPT",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "现代化的 AI PPT 生成器：公式/图片/表格/定理/代码高亮原样渲染，Beamer 风格渐进显示，自动编号与交叉引用，支持任意 OpenAI 兼容 API",
   "main": "main/main.js",
   "author": "AIPPT Team",

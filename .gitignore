@@ -5,3 +5,4 @@ test/out/
 test/fixtures/
 *.log
 .DS_Store
+.electron-dist/

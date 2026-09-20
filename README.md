@@ -1,10 +1,10 @@
-# ⚡ AIPPT v2.2 — 把 Markdown 变成**公式可编辑、可以点着讲**的 PPT
+# ⚡ AIPPT v2.2.1 — 把 Markdown 变成**公式可编辑、可以点着讲**的 PPT
 
 > 用写 Markdown 的方式做学术/技术演示：公式是 **PowerPoint 原生公式对象**（双击就能改），
 > 渐进显示是**真的点击出现动画**，还有目录、文献、算法伪代码、定理与交叉引用。
 > 全程离线渲染，**不需要安装 TeX**。
 
-![version](https://img.shields.io/badge/version-2.2.0-2f6feb) ![electron](https://img.shields.io/badge/Electron-35-blue) ![katex](https://img.shields.io/badge/KaTeX-0.18-9f7aea) ![omml](https://img.shields.io/badge/OMML-PowerPoint%20%E5%8E%9F%E7%94%9F%E5%85%AC%E5%BC%8F-0a7b34) ![tex](https://img.shields.io/badge/TeX-%E4%B8%8D%E9%9C%80%E8%A6%81-orange) ![exe](https://img.shields.io/badge/windows-x64-6b7280)
+![version](https://img.shields.io/badge/version-2.2.1-2f6feb) ![electron](https://img.shields.io/badge/Electron-35-blue) ![katex](https://img.shields.io/badge/KaTeX-0.18-9f7aea) ![omml](https://img.shields.io/badge/OMML-PowerPoint%20%E5%8E%9F%E7%94%9F%E5%85%AC%E5%BC%8F-0a7b34) ![tex](https://img.shields.io/badge/TeX-%E4%B8%8D%E9%9C%80%E8%A6%81-orange) ![exe](https://img.shields.io/badge/windows-x64-6b7280)
 
 ---
 
@@ -47,6 +47,12 @@ v1 已经能"Markdown → 好看的 PPT"。v2.2 把这些**学术刚需**补齐�
 | 6 | 🛡 **公式兜底与降级** | 窄平台（WPS/LibreOffice/Keynote）自动回落到同位置高清图 | `mc:AlternateContent`：`Choice`=原生公式，`Fallback`=图片（**PowerPoint 自己导出公式的做法**） |
 | 7 | 🎨 **样式也可以做成插件** | 把 `*.aippt-style.json` 导入进来即用；右键任意样式可导出 JSON 改完再导入 | 纯数据（只含颜色/字体/边距），严格校验、越界夹紧、内建不覆盖 |
 | 8 | 📚 **文献库可直接写在 md 里** | 界面导入 `.bib`，或把 BibTeX 写进 md（含 HTML 注释里，页面上不可见） | 三种来源自动合并：界面导入 + 同目录 `references.bib` + md 内嵌 |
+
+> **v2.2.1 补丁**：
+> ① **左右两栏各自独立滚动**——鼠标在哪一侧，滚轮就只滚那一侧（页面本身不再滚动）；
+> ② **默认示例换成 `examples/beamer-demo.md`**（学术风、覆盖全部能力，含目录/文献/算法/动画），
+>   并新增「全功能示例」按钮可切到 `examples/showcase.md`；
+> ③ 修掉"行内代码里的图片语法被当成真图片"（`` `![](x.png)` `` 现在只是文字，不再产生"图片未找到"告警）。
 
 > **v2.2.0 补丁（重要）**：修掉了「点击出现动画」在真实放映器里**能点击但不出现内容**的问题
 > （缺少 `<p:bldLst>` 构建列表 + 标记剥离正则跨 run 吃掉正文）。
@@ -97,6 +103,7 @@ v1 打下的地基在同一条流水线上继续可用：公式/表格/图片渲
 - 随包附带 3 个示例插件：`styles/beamer-academic.aippt-style.json`（学术衬线）、
   `styles/midnight-neon.aippt-style.json`（深色霓虹）、`styles/paper-ink.aippt-style.json`（极简水墨）
 - 样张：`test/out/style-*.pptx`（同一份内容 × 9 套样式，直接开对比）
+- 界面截图：`test/out/ui-preview.png`
 - 完整规范与设计说明：`docs/style-plugins.md`
 
 ---
@@ -105,7 +112,7 @@ v1 打下的地基在同一条流水线上继续可用：公式/表格/图片渲
 
 ### 方式一：用打包好的 exe
 
-1. 取得 `dist/AIPPT-2.2.0-portable.exe`，双击运行（免安装）
+1. 取得 `dist/AIPPT-2.2.1-portable.exe`，双击运行（免安装）
 2. 选「仅排版（不调 AI）」即可离线使用；要 AI 润色文字再填 API
 3. 导入 Markdown（或点「载入示例 Markdown」）
 4. 选样式 → 选**公式导出方式** → 选分步方式 → 选保存位置 → 生成
@@ -124,6 +131,7 @@ node_modules\electron\dist\electron.exe test\make-demo.js           # 三份示�
 node_modules\electron\dist\electron.exe test\make-style-samples.js  # 9 套样式样张
 node test\style-tests.js                                   # 29 项样式插件测试
 pwsh -File test\wps-anim-probe.ps1 -Pptx test\out\anim-probe.pptx -Slide 2   # 在真 WPS 里验动画
+node_modules\electron\dist\electron.exe test\ui-shot.js    # 界面截图 + 左右栏/预览框自检 → test/out/ui-preview.png
 python test\verify-latex.py test\out\v22-e2e.pptx           # 第三方（python-pptx）校验
 npm run dist                                                # 打包 Windows 便携版
 ```
@@ -360,5 +368,8 @@ aippt/
 ## 📄 License
 
 MIT
+
+
+
 
 

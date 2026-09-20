@@ -85,6 +85,43 @@ function createWindow() {
             await new Promise((r) => setTimeout(r, 400));
             const previewCount = document.querySelectorAll('.slide-item').length;
             const notesShown = document.querySelectorAll('.slide-notes').length;
+            // 左右两栏必须各自独立滚动，且**大纲预览框不能被撑破**：
+            // 预览卡片有高度上限，正文区在框内滚动（框内滚动 + 外层面板滚动并存，互不干扰）
+            const left = document.querySelector('.panel-left');
+            const right = document.querySelector('.panel-right');
+            const card = document.querySelector('.preview-card');
+            const body = document.querySelector('.preview-body');
+            const lcs = getComputedStyle(left);
+            const rcs = getComputedStyle(right);
+            const bcs = getComputedStyle(body);
+            const cardRect = card.getBoundingClientRect();
+            const bodyRect = body.getBoundingClientRect();
+            const rightBefore = right.scrollTop;
+            const bodyBefore = body.scrollTop;
+            left.scrollTop = 9999;                       // 滚左栏
+            const leftScrolled = left.scrollTop;
+            const rightStill = right.scrollTop === rightBefore;
+            const bodyStill = body.scrollTop === bodyBefore;
+            left.scrollTop = 0;
+            body.scrollTop = 9999;                       // 滚预览框内部
+            const bodyScrolled = body.scrollTop;
+            const leftStill = left.scrollTop === 0;
+            body.scrollTop = 0;
+            const layout = {
+              pageNotScrollable: document.documentElement.scrollHeight <= window.innerHeight + 1,
+              leftOverflow: lcs.overflowY,
+              rightOverflow: rcs.overflowY,
+              bodyOverflow: bcs.overflowY,
+              leftContain: lcs.overscrollBehaviorY,
+              rightContain: rcs.overscrollBehaviorY,
+              leftScrolled,
+              bodyScrolled,
+              independent: leftScrolled > 0 && rightStill && bodyStill && bodyScrolled > 0 && leftStill,
+              outlineInsideCard: bodyRect.bottom <= cardRect.bottom + 1,
+              cardInsideViewport: cardRect.bottom <= window.innerHeight + 1,
+              cardBounded: cardRect.height <= right.clientHeight + 1,
+              bodyScrollable: body.scrollHeight > body.clientHeight
+            };
             const res = await window.aippt.generate({
               apiConfig: { baseUrl: ${JSON.stringify(mockUrl)}, apiKey: 'smoke', model: 'mock-model' },
               mdContent: ${JSON.stringify(smokeMd)},
@@ -93,7 +130,7 @@ function createWindow() {
               outPath: ${JSON.stringify(smokeOut)}
             });
             const fileOk = res.ok && res.slideCount === 3;
-            return { steps, styles, api, previewCount, notesShown, fileOk, slideCount: res.slideCount, errs };
+            return { steps, styles, api, previewCount, notesShown, fileOk, slideCount: res.slideCount, errs, layout };
           })()`);
           const outExists = fs.existsSync(smokeOut);
 
@@ -193,8 +230,12 @@ function createWindow() {
           }
 
           const ok = result.steps === 4 && result.styles >= 6 && result.api === 'object' &&   // 内置 6 套 + 任意样式插件
-            result.previewCount === 11 && result.notesShown === 4 && result.fileOk === true &&
+            result.previewCount === 12 && result.notesShown >= 1 && result.fileOk === true &&
             result.slideCount === 3 && outExists && result.errs.length === 0 &&
+            // 左右两栏独立滚动（页面本身不滚）
+            result.layout && result.layout.independent === true &&
+            result.layout.outlineInsideCard === true && result.layout.cardInsideViewport === true &&
+            result.layout.bodyScrollable === true && result.layout.bodyOverflow === 'auto' &&
             // 冒烟文档：封面 + 公式 + 表格 + 定理 = 4 页，渐进显示 2 步 = 共 6 页；渲染图 ≥ 3 张
             mathMedia >= 3 && mathSlides >= 6 && hljsOk === true &&
             // v2.2：原生公式 + 图片兜底 + 点击动画（在打包产物里也要成立）
@@ -241,18 +282,24 @@ ipcMain.handle('app:info', () => ({
   platform: process.platform
 }));
 
-/** 内置示例：读 examples/showcase.md（打包后从 asar 里读），读不到时退回内置文本 */
-ipcMain.handle('sample:md', () => {
-  const candidates = [
-    path.join(__dirname, '..', 'examples', 'showcase.md'),
-    path.join(process.resourcesPath || '', 'app', 'examples', 'showcase.md')
+/**
+ * 内置示例：默认 examples/beamer-demo.md（学术风、覆盖全部能力）。
+ * 一并返回文件路径，这样示例里的相对资源（references.bib / 图片）能按它所在目录解析。
+ * 传 'showcase' 可切到「全功能总览」示例 examples/showcase.md。
+ */
+ipcMain.handle('sample:md', (_e, kind) => {
+  const want = kind === 'showcase' ? 'showcase.md' : 'beamer-demo.md';
+  const bases = [
+    path.join(__dirname, '..', 'examples'),
+    path.join(process.resourcesPath || '', 'app', 'examples')
   ];
-  for (const p of candidates) {
+  for (const base of bases) {
+    const p = path.join(base, want);
     try {
-      if (fs.existsSync(p)) return { name: 'showcase.md', content: fs.readFileSync(p, 'utf8') };
+      if (fs.existsSync(p)) return { name: want, content: fs.readFileSync(p, 'utf8'), path: p };
     } catch (e) { /* 继续尝试 */ }
   }
-  return { name: '示例.md', content: FALLBACK_SAMPLE_MD };
+  return { name: '示例.md', content: FALLBACK_SAMPLE_MD, path: '' };
 });
 
 const FALLBACK_SAMPLE_MD = [
@@ -457,6 +504,8 @@ if (!gotLock) {
     }
   });
 }
+
+
 
 
 
