@@ -15,7 +15,8 @@
   "dependencies": {
     "highlight.js": "^11.12.0",
     "katex": "^0.18.7",
-    "pptxgenjs": "^3.12.0"
+    "pptxgenjs": "^3.12.0",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "electron": "^35.0.0",
@@ -24,7 +25,9 @@
   "build": {
     "appId": "com.aippt.app",
     "productName": "AIPPT",
-    "asar": true,
+    "asar": {
+      "smartUnpack": false
+    },
     "directories": {
       "output": "dist"
     },
@@ -51,7 +54,8 @@
       "requestedExecutionLevel": "asInvoker"
     },
     "portable": {
-      "artifactName": "AIPPT-${version}-portable.${ext}"
+      "artifactName": "AIPPT-${version}-portable.${ext}",
+      "unpackDirName": "AIPPT-${version}"
     }
   }
 }

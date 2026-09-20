@@ -130,6 +130,7 @@ node_modules\electron\dist\electron.exe test\e2e-features.js
 node_modules\electron\dist\electron.exe test\make-demo.js           # 三份示范稿（含内置示例 showcase）
 node_modules\electron\dist\electron.exe test\make-style-samples.js  # 9 套样式样张
 node test\style-tests.js                                   # 29 项样式插件测试
+node test\package-tests.js                                 # 8 项打包与启动健壮性检查
 pwsh -File test\wps-anim-probe.ps1 -Pptx test\out\anim-probe.pptx -Slide 2   # 在真 WPS 里验动画
 node_modules\electron\dist\electron.exe test\ui-shot.js    # 界面截图 + 左右栏/预览框自检 → test/out/ui-preview.png
 python test\verify-latex.py test\out\v22-e2e.pptx           # 第三方（python-pptx）校验
@@ -356,6 +357,31 @@ aippt/
 **关键不变量**：任何产物都不得残留 `⟦MATH:⟧`、`⟦ANIM:⟧`、`⟪T⟫`、`⟪P:⟧`，也不得出现 `<w:>` 命名空间；
 动画目标 `spid` 必须真实存在、且其形状里**必须还留着正文**——这几条都在 E2E 里硬断言。
 
+## 🚑 便携版打不开？先看这里
+
+便携版 exe（`AIPPT-x.y.z-portable.exe`）的运行方式，是把程序**解压到 `%TEMP%` 再启动**。
+如果这次解压不完整（被上一轮运行删了一半、被杀毒软件拦下、磁盘写满、直接被强杀），
+就会出现 `Cannot find module 'jszip'` 这类"程序文件不完整"的错误。
+
+**v2.2.1 起已经做了三层加固**：
+
+1. **所有依赖都在 `app.asar` 内部**（关掉了 electron-builder 的 `smartUnpack`）——
+   不再有 `app.asar.unpacked` 这种"少一个目录就跑不起来"的脆弱结构；
+2. **启动自检 + 中文提示**：缺文件时弹窗明确告诉你缺什么、临时解压目录在哪、怎么修，
+   而不是甩一句没有上下文的 `Uncaught Exception`；
+3. **解压目录带版本号**（`%TEMP%\AIPPT-2.2.1`），新版本不会复用旧版本残留的目录。
+
+真遇到了，照下面做（任选其一）：
+
+```powershell
+# 1) 关闭程序，删掉临时解压目录，再重新双击 exe
+Remove-Item "$env:TEMP\AIPPT-*" -Recurse -Force
+
+# 2) 或把 exe 换一个目录再运行（例如 D:\AIPPT\）
+# 3) 若反复出现，把该 exe 加入杀毒软件白名单后重试
+```
+
+另外注意：本程序是**单实例**的，已经开着一个窗口时，再双击 exe 不会开第二个，而是把已有窗口切到前台。
 ## ⚠️ 已知限制（别踩）
 
 - **点击动画**：已在真实 WPS 与 PowerPoint 兼容结构下验证；Google Slides/LibreOffice 若忽略动画，内容会一次性全部显示，
@@ -368,6 +394,8 @@ aippt/
 ## 📄 License
 
 MIT
+
+
 
 
 

@@ -8,11 +8,55 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-const { runGenerate } = require('./generate-flow.js');
-const { testConnection } = require('./ai.js');
-const { RichRenderer } = require('./rich-renderer.js');
-const styleStore = require('./style-store.js');
-const { STYLES } = require('../shared/styles.js');
+// ---------------------------------------------------------------------------
+// 启动自检：便携版 exe 会把自己解压到 %TEMP% 再运行。若解压不完整（被杀软拦下、
+// 上一次运行时被删了一半、磁盘写满…），require 会抛出一句没有上下文的
+// "Cannot find module 'jszip'"，用户完全不知道怎么办。这里把它变成可操作的提示。
+// ---------------------------------------------------------------------------
+const RUNTIME_DEPS = ['pptxgenjs', 'jszip', 'katex', 'highlight.js'];
+function findMissingDeps() {
+  const missing = [];
+  for (const m of RUNTIME_DEPS) {
+    try { require.resolve(m); } catch (e) { missing.push(m); }
+  }
+  return missing;
+}
+
+let runGenerate = null;
+let testConnection = null;
+let RichRenderer = null;
+let styleStore = null;
+let STYLES = [];
+let startupError = null;
+try {
+  ({ runGenerate } = require('./generate-flow.js'));
+  ({ testConnection } = require('./ai.js'));
+  ({ RichRenderer } = require('./rich-renderer.js'));
+  styleStore = require('./style-store.js');
+  ({ STYLES } = require('../shared/styles.js'));
+} catch (e) {
+  startupError = e;
+}
+
+/** 组装一条能照着做的错误说明 */
+function startupErrorText(err) {
+  const missing = findMissingDeps();
+  const exeDir = path.dirname(process.execPath);
+  const lines = ['AIPPT 启动失败：程序文件不完整。', ''];
+  if (missing.length) {
+    lines.push(`缺少运行依赖：${missing.join('、')}`);
+    lines.push('（便携版 exe 需要先把程序解压到临时目录，这次解压不完整）');
+  } else {
+    lines.push(`错误：${String((err && err.message) || err)}`);
+  }
+  lines.push('');
+  lines.push('解决办法（任选其一，推荐第 1 条）：');
+  lines.push('1) 关闭本程序，删除下面这个临时解压目录，再重新双击 exe：');
+  lines.push(`   ${exeDir}`);
+  lines.push('2) 或先把 exe 换一个目录（例如 D:\\AIPPT\\）再运行；');
+  lines.push('3) 若反复出现，多半是杀毒软件拦截了解压，请把该 exe 加入白名单后重试。');
+  return lines.join('\n');
+}
 
 const MAX_MD_BYTES = 2 * 1024 * 1024; // 2MB
 
@@ -133,6 +177,13 @@ function createWindow() {
             return { steps, styles, api, previewCount, notesShown, fileOk, slideCount: res.slideCount, errs, layout };
           })()`);
           const outExists = fs.existsSync(smokeOut);
+          // 打包完整性：asar 里必须真的能解析到运行依赖（曾经 jszip 被单独解包到
+          // app.asar.unpacked，解压不完整就 "Cannot find module 'jszip'"）
+          const asarHasDeps = ['pptxgenjs', 'jszip', 'katex', 'highlight.js'].every((m) => {
+            try { require.resolve(m); return true; } catch (e) { return false; }
+          });
+          const unpackedDir = path.join(process.resourcesPath || '', 'app.asar.unpacked');
+          const hasUnpacked = fs.existsSync(unpackedDir);
 
           // ---- v2/v2.1 渲染链路（公式 / 表格 / 定理 / 渐进显示 / 代码高亮）----
           const mathMd = [
@@ -238,9 +289,10 @@ function createWindow() {
             result.layout.bodyScrollable === true && result.layout.bodyOverflow === 'auto' &&
             // 冒烟文档：封面 + 公式 + 表格 + 定理 = 4 页，渐进显示 2 步 = 共 6 页；渲染图 ≥ 3 张
             mathMedia >= 3 && mathSlides >= 6 && hljsOk === true &&
+            asarHasDeps === true && hasUnpacked === false &&
             // v2.2：原生公式 + 图片兜底 + 点击动画（在打包产物里也要成立）
             ommlOk && ommlMath >= 2;
-          const payload = { ...result, outExists, mathMedia, mathSlides, hljsOk, ommlOk, ommlMath, ommlFallbacks, animSlides, ok };
+          const payload = { ...result, outExists, mathMedia, mathSlides, hljsOk, ommlOk, ommlMath, ommlFallbacks, animSlides, asarHasDeps, hasUnpacked, ok };
           const smokeReport = path.join(os.tmpdir(), 'aippt-smoke-result.json');
           try { fs.writeFileSync(smokeReport, JSON.stringify(payload)); } catch (e) { /* ignore */ }
           console.log('AIPPT_SMOKE_RESULT ' + JSON.stringify(payload));
@@ -487,6 +539,14 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    if (startupError) {
+      // 文件不完整：给出可照做的说明后退出，不再弹裸的 Uncaught Exception
+      const text = startupErrorText(startupError);
+      console.error('AIPPT_STARTUP_ERROR ' + text.replace(/\n/g, ' | '));
+      try { dialog.showErrorBox('AIPPT 无法启动（程序文件不完整）', text); } catch (e) { /* 无 GUI 时忽略 */ }
+      app.exit(1);
+      return;
+    }
     createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -504,6 +564,7 @@ if (!gotLock) {
     }
   });
 }
+
 
 
 
