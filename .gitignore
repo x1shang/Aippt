@@ -6,3 +6,14 @@ test/fixtures/
 *.log
 .DS_Store
 .electron-dist/
+
+# 本地调试/探针脚本：留在工作区，不进版本库
+tmp-*.js
+tmp-*.ps1
+test/probe-animation.js
+test/proto-render.js
+test/ui-shot.js
+test/preview-pptx.js
+test/wps-anim-diag.ps1
+test/wps-anim-probe.ps1
+test/wps-make-oracle.ps1
