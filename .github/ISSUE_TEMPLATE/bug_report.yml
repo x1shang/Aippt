@@ -1,0 +1,87 @@
+name: 问题反馈 / 生成结果不对
+description: 生成的 .pptx 不对、某段 Markdown 没被识别、程序打不开——都发这里。
+title: "[反馈] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        谢谢反馈！**有最小复现的 Markdown，我就能直接把它变成测试用例。**
+
+        提交前可以先看 [`README`](../blob/main/README.md) 的「⚠️ 已知限制（别踩）」一节：
+        有些现象是已知的（例如本机没有 PowerPoint 时无法验证渲染效果、某些 LaTeX 宏不支持）。
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: 问题出在哪一步？
+      options:
+        - 程序打不开 / 启动报错
+        - 导入 Markdown 时
+        - 点「生成 PPT」时
+        - 生成的 pptx 打不开 / 提示"需要修复"
+        - 生成的 pptx 能开，但内容不对
+        - 公式不能双击编辑
+        - 点击出现动画不生效
+        - 样式插件 / 自定义样式
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: md
+    attributes:
+      label: 最小复现的 Markdown
+      description: 贴出能触发问题的最短那一段（能删掉的都删掉——越短越好定位）
+      render: markdown
+      placeholder: |
+        # 标题
+
+        行内公式 $a^2 + b^2 = c^2$
+
+        这段的公式生成后双击改不了
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你期望的结果
+      placeholder: "期望公式在 PowerPoint 里是原生公式对象，双击可编辑"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际发生了什么
+      description: 报错请完整粘贴；涉及产物请说明在哪个软件里打开、看到什么
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      placeholder: "AIPPT v2.2.1 便携版"
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: 系统 + 用来打开 pptx 的软件及版本（这项很关键：渲染效果与阅读器强相关）
+      placeholder: "Windows 11 ／ PowerPoint 365 版本 2405 ／ 或 WPS 12.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 用的哪种生成模式？
+      options:
+        - 仅排版（不调 AI）
+        - AI 增强（调用了 API）
+        - 不确定
+    validations:
+      required: false
