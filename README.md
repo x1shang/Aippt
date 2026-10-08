@@ -16,6 +16,36 @@
 AIPPT 想要的是第三种东西：写作体验接近 LaTeX（Markdown + `$公式$` + overlay + 定理 + 引用 + 算法），
 交付物却是**能继续编辑的 .pptx**——公式是公式、文字是文字、动画是动画。
 
+## ⚡ 30 秒试一下
+
+1. 到 [Releases](https://github.com/x1shang/Aippt/releases) 下载 **`AIPPT-*-portable.exe`**（便携版，免安装），双击运行
+2. 选 **「仅排版（不调 AI）」** —— 不需要 API key，全程离线
+3. 点 **「载入示例 Markdown」**；或者把下面这段存成 `demo.md` 导入：
+
+```markdown
+# 演示：公式是可编辑对象
+
+## 一、公式不是图片
+行内公式 $E = mc^2$，行间公式：
+
+$$
+\int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}
+$$
+
+生成后请到 PowerPoint 里**双击这个公式**——它是原生公式对象，能直接改。
+
+\pause
+
+## 二、渐进显示
+`\pause` 之后的内容会在放映时**点击后出现**（Beamer 手感）。
+```
+
+4. 点「生成 PPT」。**请用真实的 PowerPoint / WPS 打开产物确认渲染效果**——本机没装 Office 时，自动化测试只能验证文件结构，这是「已知限制」里写明的第一条。
+
+想看全部能力（目录、文献引用 `\cite`、算法伪代码、定理、八套样式插件）→ 仓库内的 [`examples/beamer-demo.md`](examples/beamer-demo.md) 与 [`examples/showcase.md`](examples/showcase.md)。
+
+**生成结果不对、或你的某段 Markdown 没被正确识别？** → [开一个 Issue](https://github.com/x1shang/Aippt/issues/new/choose)，**把那段最小 Markdown 贴进来就行**——有最小复现的我能直接加进 `test/run-core-tests.js`。
+
 ## 和同生态位工具比，AIPPT 在哪一格
 
 | 工具 | 输入 | 输出 | 公式 | 公式可编辑 | 渐进显示 | 交付形态 |
